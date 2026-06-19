@@ -5,9 +5,11 @@
         Width="400" Height="300"
         WindowStartupLocation="CenterScreen">
     <Grid Background="#F0F0F0">
-        <TextBlock Text="Desktop Organizer — Phase 0"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   FontSize="18" Foreground="#333333"/>
+        <ScrollViewer Margin="16">
+            <TextBlock x:Name="SummaryText"
+                       FontSize="13" Foreground="#333333"
+                       FontFamily="Consolas"
+                       TextWrapping="Wrap"/>
+        </ScrollViewer>
     </Grid>
 </Window>
