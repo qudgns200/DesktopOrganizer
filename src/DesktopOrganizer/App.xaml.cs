@@ -1,5 +1,8 @@
 using System.Threading;
 using System.Windows;
+// UseWindowsForms=true causes ambiguity: resolve both conflicting types
+using Application = System.Windows.Application;
+using MessageBox = System.Windows.MessageBox;
 
 namespace DesktopOrganizer;
 

@@ -1,5 +1,6 @@
 using DesktopOrganizer.Models;
 using DesktopOrganizer.Services;
+using Xunit;
 
 namespace DesktopOrganizer.Tests.Services;
 
