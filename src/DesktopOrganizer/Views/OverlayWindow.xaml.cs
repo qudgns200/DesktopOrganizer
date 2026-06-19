@@ -1,9 +1,10 @@
-using System.Diagnostics;
-using System.Text;
 using System.Windows;
-using DesktopOrganizer.Models;
-using DesktopOrganizer.Services;
+using System.Windows.Interop;
+using DesktopOrganizer.Interop;
 using DesktopOrganizer.ViewModels;
+using Microsoft.Win32;
+// UseWindowsForms=true: resolve ambiguity with System.Drawing.Point
+using Point = System.Windows.Point;
 
 namespace DesktopOrganizer.Views;
 
@@ -13,52 +14,74 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
-        Loaded += OnLoaded;
+
+        FitToScreen();
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    // ── Lifecycle ────────────────────────────────────────────────
+
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        // Phase 1 verification: read desktop icons and display summary
-        var settings = new AppSettings();
-        var reader = new DesktopReaderService();
-        var classifier = new FileClassifierService();
-        var exclusion = new ExclusionService(settings);
+        base.OnSourceInitialized(e);
 
-        var icons = reader.ReadDesktopIcons();
-        classifier.ClassifyAll(icons);
-        exclusion.ApplyExclusion(icons);
-
-        SummaryText.Text = BuildSummary(icons);
-        Debug.WriteLine($"[Phase 1] Desktop scan complete — {icons.Count} icons");
+        // Hook into the window message pump to implement mouse pass-through
+        var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        source?.AddHook(WndProc);
     }
 
-    private static string BuildSummary(List<IconInfo> icons)
+    protected override void OnClosed(EventArgs e)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Desktop Organizer — Phase 1 확인창");
-        sb.AppendLine($"아이콘 총 {icons.Count}개 감지됨");
-        sb.AppendLine(new string('─', 48));
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        base.OnClosed(e);
+    }
 
-        var groups = icons
-            .GroupBy(i => i.Category)
-            .OrderByDescending(g => g.Count());
+    // ── Screen sizing ────────────────────────────────────────────
 
-        foreach (var g in groups)
-            sb.AppendLine($"  {g.Key,-15} {g.Count(),3}개");
+    private void FitToScreen()
+    {
+        Left   = SystemParameters.VirtualScreenLeft;
+        Top    = SystemParameters.VirtualScreenTop;
+        Width  = SystemParameters.PrimaryScreenWidth;
+        Height = SystemParameters.PrimaryScreenHeight;
+    }
 
-        sb.AppendLine(new string('─', 48));
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(FitToScreen);
+    }
 
-        int sysCount = icons.Count(i => i.IsSystemIcon);
-        sb.AppendLine($"  시스템 아이콘 (제외 대상): {sysCount}개");
+    // ── Mouse pass-through ───────────────────────────────────────
 
-        sb.AppendLine();
-        sb.AppendLine("[ 아이콘 목록 ]");
-        foreach (var icon in icons.OrderBy(i => i.FileName))
+    /// <summary>
+    /// Returns HTTRANSPARENT for areas where no child control is present,
+    /// so mouse messages fall through to the desktop shell underneath.
+    /// </summary>
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WindowInterop.WM_NCHITTEST)
+            return IntPtr.Zero;
+
+        // Let Windows compute the default hit result first
+        var defaultResult = WindowInterop.DefWindowProc(hwnd, msg, wParam, lParam);
+
+        // Only override HTCLIENT hits (the interior client area)
+        if (defaultResult.ToInt32() != WindowInterop.HTCLIENT)
+            return defaultResult;
+
+        // Convert screen coordinates to WPF logical coordinates
+        var screenX = WindowInterop.SignedLoWord(lParam);
+        var screenY = WindowInterop.SignedHiWord(lParam);
+        var logicalPoint = PointFromScreen(new Point(screenX, screenY));
+
+        // If no visible child element is under the cursor → pass through
+        var hitElement = InputHitTest(logicalPoint);
+        if (hitElement is null || ReferenceEquals(hitElement, OverlayCanvas))
         {
-            string flag = icon.IsSystemIcon ? "[SYS]" : "     ";
-            sb.AppendLine($"  {flag} ({icon.X,5},{icon.Y,5})  {icon.FileName}");
+            handled = true;
+            return new IntPtr(WindowInterop.HTTRANSPARENT);
         }
 
-        return sb.ToString();
+        return defaultResult;
     }
 }

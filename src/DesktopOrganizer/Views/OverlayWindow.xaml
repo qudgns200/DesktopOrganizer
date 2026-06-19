@@ -1,15 +1,17 @@
 <Window x:Class="DesktopOrganizer.Views.OverlayWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Desktop Organizer"
-        Width="400" Height="300"
-        WindowStartupLocation="CenterScreen">
-    <Grid Background="#F0F0F0">
-        <ScrollViewer Margin="16">
-            <TextBlock x:Name="SummaryText"
-                       FontSize="13" Foreground="#333333"
-                       FontFamily="Consolas"
-                       TextWrapping="Wrap"/>
-        </ScrollViewer>
-    </Grid>
+        Title="Desktop Organizer Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Left="0" Top="0">
+    <!--
+        Canvas is the layout root for Container controls (added in Phase 3).
+        It has no background so all empty areas are hit-test transparent
+        after the WM_NCHITTEST hook in code-behind.
+    -->
+    <Canvas x:Name="OverlayCanvas" Background="Transparent" IsHitTestVisible="True"/>
 </Window>
