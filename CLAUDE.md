@@ -12,8 +12,8 @@
 | 프로젝트명 | Desktop Organizer |
 | 목적 | Windows 바탕화면 아이콘을 Container와 Rule로 자동 관리하는 생산성 프로그램 |
 | 핵심 명세 문서 | `docs/03_FunctionSpec.md` (모든 기능의 단일 진실 공급원) |
-| 현재 Phase | **Phase 1** (Phase 0 완료) |
-| 완료된 기능 | Phase 0 기반 세팅 완료 (Models, MVVM, 프로젝트 구조, 빌드 환경) |
+| 현재 Phase | **Phase 2** (Phase 1 완료) |
+| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001 바탕화면 읽기, F-002 파일 분류, F-003 시스템 아이콘 제외) |
 
 ---
 
@@ -150,9 +150,9 @@ DesktopOrganizer/
 
 | 기능 ID | 기능명 | 우선순위 | 상태 |
 |---------|--------|----------|------|
-| F-001 | 바탕화면 읽기 | Must Have | ⬜ 미완료 |
-| F-002 | 파일 분류 | Must Have | ⬜ 미완료 |
-| F-003 | 기본 아이콘 제외 | Must Have | ⬜ 미완료 |
+| F-001 | 바탕화면 읽기 | Must Have | ✅ 완료 |
+| F-002 | 파일 분류 | Must Have | ✅ 완료 |
+| F-003 | 기본 아이콘 제외 | Must Have | ✅ 완료 |
 | F-004 | Container 생성 | Must Have | ⬜ 미완료 |
 | F-005 | Container 수정 | Must Have | ⬜ 미완료 |
 | F-006 | Container 삭제 | Must Have | ⬜ 미완료 |
@@ -197,4 +197,4 @@ DesktopOrganizer/
 ---
 
 *이 파일은 프로젝트가 진행되면서 지속적으로 업데이트된다.*
-*마지막 업데이트: 2026-06-18 — Phase 0 완료, 기술 스택 및 폴더 구조 확정*
+*마지막 업데이트: 2026-06-19 — Phase 1 완료 (F-001~F-003), Phase 2 시작 예정*
