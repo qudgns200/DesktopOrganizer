@@ -1,0 +1,67 @@
+<UserControl x:Class="DesktopOrganizer.Views.Controls.ContainerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DesktopOrganizer.Views.Controls"
+             Width="{Binding Width}"
+             Height="{Binding Height}"
+             IsHitTestVisible="True">
+
+    <UserControl.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+    </UserControl.Resources>
+
+    <!-- Right-click context menu (F-005 rename, F-006 delete) -->
+    <UserControl.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="이름 변경" Command="{Binding BeginRenameCommand}"/>
+            <Separator/>
+            <MenuItem Header="삭제" Command="{Binding DeleteCommand}"/>
+        </ContextMenu>
+    </UserControl.ContextMenu>
+
+    <Border Background="#44000000"
+            BorderBrush="#CCFFFFFF"
+            BorderThickness="1"
+            CornerRadius="4">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="26"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title bar — double-click to rename, drag handled in Phase 4 -->
+            <Border Grid.Row="0"
+                    Background="#60000000"
+                    CornerRadius="3,3,0,0"
+                    Cursor="SizeAll"
+                    MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
+                <Grid Margin="6,0,4,0">
+                    <!-- Normal display mode -->
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="White"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
+
+                    <!-- Inline edit mode (F-004 after create, F-005 double-click) -->
+                    <TextBox x:Name="NameEditor"
+                             Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                             Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="White"
+                             SelectionBrush="LightBlue"
+                             CaretBrush="White"
+                             FontSize="12"
+                             VerticalAlignment="Center"
+                             KeyDown="OnNameEditorKeyDown"
+                             LostFocus="OnNameEditorLostFocus"/>
+                </Grid>
+            </Border>
+
+            <!-- Content area — icons placed here in Phase 5 -->
+            <Border Grid.Row="1" Background="Transparent"/>
+        </Grid>
+    </Border>
+</UserControl>

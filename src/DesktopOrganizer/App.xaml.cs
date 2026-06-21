@@ -2,6 +2,8 @@ using System.Drawing;
 using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
+using DesktopOrganizer.Services;
+using DesktopOrganizer.ViewModels;
 // UseWindowsForms=true causes ambiguity: resolve both conflicting types
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
@@ -15,6 +17,7 @@ public partial class App : Application
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _pauseMenuItem;
     private bool _watcherPaused;
+    private SettingsService? _settingsService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -28,9 +31,16 @@ public partial class App : Application
         }
 
         base.OnStartup(e);
+
+        _settingsService = new SettingsService();
+        _settingsService.Load();
+
+        var containerService = new ContainerService(_settingsService);
+        var mainVm           = new MainViewModel(containerService);
+
         InitializeTrayIcon();
 
-        var overlay = new Views.OverlayWindow();
+        var overlay = new Views.OverlayWindow(mainVm);
         overlay.Show();
     }
 
