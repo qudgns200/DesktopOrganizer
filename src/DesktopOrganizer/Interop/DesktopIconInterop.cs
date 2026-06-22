@@ -12,11 +12,12 @@ namespace DesktopOrganizer.Interop;
 internal static class DesktopIconInterop
 {
     // ListView messages
-    private const int LVM_FIRST = 0x1000;
-    private const int LVM_GETITEMCOUNT = LVM_FIRST + 4;
-    private const int LVM_GETITEMPOSITION = LVM_FIRST + 16;
-    private const int LVM_GETITEMW = LVM_FIRST + 75;
-    private const uint LVIF_TEXT = 0x0001;
+    private const int LVM_FIRST             = 0x1000;
+    private const int LVM_GETITEMCOUNT      = LVM_FIRST + 4;
+    private const int LVM_GETITEMPOSITION   = LVM_FIRST + 16;
+    private const int LVM_SETITEMPOSITION32 = LVM_FIRST + 167;  // 32-bit coords (high-DPI safe)
+    private const int LVM_GETITEMW          = LVM_FIRST + 75;
+    private const uint LVIF_TEXT            = 0x0001;
 
     // Process access rights
     private const uint PROCESS_VM_READ = 0x0010;
@@ -66,6 +67,77 @@ internal static class DesktopIconInterop
     [DllImport("kernel32.dll")] private static extern bool VirtualFreeEx(IntPtr proc, IntPtr addr, nint size, uint type);
     [DllImport("kernel32.dll")] private static extern bool WriteProcessMemory(IntPtr proc, IntPtr addr, byte[] buf, nint size, out nint written);
     [DllImport("kernel32.dll")] private static extern bool ReadProcessMemory(IntPtr proc, IntPtr addr, byte[] buf, nint size, out nint read);
+
+    /// <summary>
+    /// Moves desktop icons to the coordinates in <paramref name="positions"/> (display name → position).
+    /// Silently skips names not found in the ListView.
+    /// Uses LVM_SETITEMPOSITION32 (32-bit POINT) so coordinates above 32 767 work correctly on
+    /// high-DPI displays.  Does NOT move, copy, or delete any file system entries.
+    /// </summary>
+    public static void WriteIconPositions(Dictionary<string, (int X, int Y)> positions)
+    {
+        if (positions.Count == 0) return;
+
+        var listView = FindDesktopListView();
+        if (listView == IntPtr.Zero)
+        {
+            Debug.WriteLine("[DesktopIconInterop] WriteIconPositions: ListView handle not found");
+            return;
+        }
+
+        int count = (int)SendMessage(listView, LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero);
+        if (count <= 0) return;
+
+        GetWindowThreadProcessId(listView, out uint pid);
+        var hProcess = OpenProcess(
+            PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION,
+            false, pid);
+
+        if (hProcess == IntPtr.Zero)
+        {
+            Debug.WriteLine($"[DesktopIconInterop] WriteIconPositions: OpenProcess failed (PID={pid})");
+            return;
+        }
+
+        try
+        {
+            int  textBytes = MAX_ICON_NAME * sizeof(char);
+            nint lvSize    = Marshal.SizeOf<LVITEM>();
+            nint ptSize    = Marshal.SizeOf<POINT>();
+            nint total     = lvSize + ptSize + textBytes;
+
+            var remote = VirtualAllocEx(hProcess, IntPtr.Zero, total, MEM_COMMIT, PAGE_READWRITE);
+            if (remote == IntPtr.Zero) return;
+
+            try
+            {
+                var remoteLv  = remote;
+                var remotePt  = remote + (int)lvSize;
+                var remoteTxt = remote + (int)lvSize + (int)ptSize;
+
+                for (int i = 0; i < count; i++)
+                {
+                    var name = ReadItemText(hProcess, listView, i, remoteLv, remoteTxt, textBytes);
+                    if (!positions.TryGetValue(name, out var pos)) continue;
+
+                    var pt      = new POINT { X = pos.X, Y = pos.Y };
+                    var ptBytes = ToBytes(pt);
+                    WriteProcessMemory(hProcess, remotePt, ptBytes, ptBytes.Length, out _);
+                    SendMessage(listView, LVM_SETITEMPOSITION32, new IntPtr(i), remotePt);
+                }
+            }
+            finally
+            {
+                VirtualFreeEx(hProcess, remote, 0, MEM_RELEASE);
+            }
+        }
+        finally
+        {
+            CloseHandle(hProcess);
+        }
+
+        Debug.WriteLine($"[DesktopIconInterop] Wrote positions for {positions.Count} icon(s)");
+    }
 
     /// <summary>
     /// Returns a map of icon display name → desktop pixel position (X, Y).

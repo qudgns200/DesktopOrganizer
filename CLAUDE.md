@@ -12,8 +12,8 @@
 | 프로젝트명 | Desktop Organizer |
 | 목적 | Windows 바탕화면 아이콘을 Container와 Rule로 자동 관리하는 생산성 프로그램 |
 | 핵심 명세 문서 | `docs/03_FunctionSpec.md` (모든 기능의 단일 진실 공급원) |
-| 현재 Phase | **Phase 5** (Phase 4 완료) |
-| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경) |
+| 현재 Phase | **Phase 6** (Phase 5 완료) |
+| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장) |
 
 ---
 
@@ -159,8 +159,8 @@ DesktopOrganizer/
 | F-007 | Container 이동 | Must Have | ✅ 완료 |
 | F-008 | Container 크기 변경 | Must Have | ✅ 완료 |
 | F-009 | Container 스타일 변경 | Should Have | ✅ 완료 |
-| F-010 | 아이콘 자동 정렬 | Must Have | ⬜ 미완료 |
-| F-011 | 아이콘 순서 저장 | Must Have | ⬜ 미완료 |
+| F-010 | 아이콘 자동 정렬 | Must Have | ✅ 완료 |
+| F-011 | 아이콘 순서 저장 | Must Have | ✅ 완료 |
 | F-012 | Rule 생성 | Must Have | ⬜ 미완료 |
 | F-013 | Rule 수정 | Must Have | ⬜ 미완료 |
 | F-014 | Rule 삭제 | Must Have | ⬜ 미완료 |
@@ -197,4 +197,4 @@ DesktopOrganizer/
 ---
 
 *이 파일은 프로젝트가 진행되면서 지속적으로 업데이트된다.*
-*마지막 업데이트: 2026-06-22 — Phase 4 완료 (Container 이동·크기변경·스타일 변경, 105개 테스트 통과), Phase 5 시작 예정*
+*마지막 업데이트: 2026-06-23 — Phase 5 완료 (아이콘 자동 정렬·순서 저장, LVM_SETITEMPOSITION32 추가, 137개 테스트 통과), Phase 6 시작 예정*
