@@ -7,61 +7,135 @@
              IsHitTestVisible="True">
 
     <UserControl.Resources>
-        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
-        <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+        <local:BoolToVisibilityConverter      x:Key="BoolToVis"/>
+        <local:BoolToVisibilityConverter      x:Key="InvBoolToVis" Invert="True"/>
+        <local:StringToBrushConverter         x:Key="StringToBrush"/>
+        <local:DoubleToThicknessConverter     x:Key="DblToThickness"/>
+        <local:DoubleToCornerRadiusConverter  x:Key="DblToCornerRadius"/>
     </UserControl.Resources>
 
-    <!-- Right-click context menu (F-005 rename, F-006 delete) -->
+    <!-- Right-click context menu (F-005 rename, F-006 delete, F-009 style) -->
     <UserControl.ContextMenu>
         <ContextMenu>
-            <MenuItem Header="이름 변경" Command="{Binding BeginRenameCommand}"/>
+            <MenuItem Header="이름 변경"  Command="{Binding BeginRenameCommand}"/>
+            <MenuItem Header="스타일 변경" Command="{Binding EditStyleCommand}"/>
             <Separator/>
             <MenuItem Header="삭제" Command="{Binding DeleteCommand}"/>
         </ContextMenu>
     </UserControl.ContextMenu>
 
-    <Border Background="#44000000"
-            BorderBrush="#CCFFFFFF"
-            BorderThickness="1"
-            CornerRadius="4">
+    <!--
+        Outer Border: border decoration only (no background fill).
+        A separate inner Border provides the background with its own opacity
+        so the title bar is not dimmed by BackgroundOpacity.
+    -->
+    <Border BorderBrush="{Binding StyleBorderColor, Converter={StaticResource StringToBrush}}"
+            BorderThickness="{Binding StyleBorderThickness, Converter={StaticResource DblToThickness}}"
+            CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}">
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="26"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <!-- Background fill layer (F-009: colour + opacity) -->
+            <Border Background="{Binding StyleBackgroundColor, Converter={StaticResource StringToBrush}}"
+                    Opacity="{Binding StyleBackgroundOpacity}"
+                    CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}"/>
 
-            <!-- Title bar — double-click to rename, drag handled in Phase 4 -->
-            <Border Grid.Row="0"
-                    Background="#60000000"
-                    CornerRadius="3,3,0,0"
-                    Cursor="SizeAll"
-                    MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
-                <Grid Margin="6,0,4,0">
-                    <!-- Normal display mode -->
-                    <TextBlock Text="{Binding Name}"
-                               Foreground="White"
-                               FontSize="12"
-                               VerticalAlignment="Center"
-                               Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
+            <!-- Content layer -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <!-- Height=Auto so the row collapses when title is hidden -->
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-                    <!-- Inline edit mode (F-004 after create, F-005 double-click) -->
-                    <TextBox x:Name="NameEditor"
-                             Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                             Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             Foreground="White"
-                             SelectionBrush="LightBlue"
-                             CaretBrush="White"
-                             FontSize="12"
-                             VerticalAlignment="Center"
-                             KeyDown="OnNameEditorKeyDown"
-                             LostFocus="OnNameEditorLostFocus"/>
+                <!-- Title bar (F-007 drag handle, F-005 rename, F-009 style) -->
+                <Border Grid.Row="0"
+                        Background="#60000000"
+                        CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}"
+                        MinHeight="26"
+                        Visibility="{Binding StyleShowTitle, Converter={StaticResource BoolToVis}}"
+                        Cursor="SizeAll"
+                        MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown"
+                        MouseMove="OnTitleBarMouseMove"
+                        MouseLeftButtonUp="OnTitleBarMouseLeftButtonUp">
+                    <Grid Margin="6,0,4,0">
+                        <!-- Normal mode -->
+                        <TextBlock Text="{Binding Name}"
+                                   Foreground="{Binding StyleTitleFontColor, Converter={StaticResource StringToBrush}}"
+                                   FontSize="{Binding StyleTitleFontSize}"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
+                        <!-- Inline edit mode -->
+                        <TextBox x:Name="NameEditor"
+                                 Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="White"
+                                 SelectionBrush="LightBlue"
+                                 CaretBrush="White"
+                                 FontSize="12"
+                                 VerticalAlignment="Center"
+                                 KeyDown="OnNameEditorKeyDown"
+                                 LostFocus="OnNameEditorLostFocus"/>
+                    </Grid>
+                </Border>
+
+                <!-- Content area (icons placed here in Phase 5) -->
+                <Border Grid.Row="1" Background="Transparent"/>
+
+                <!-- Resize handles overlay — 8 directions (F-008) -->
+                <Grid Grid.RowSpan="2">
+                    <!-- Corners -->
+                    <Border Width="10" Height="10" Background="Transparent"
+                            HorizontalAlignment="Left"    VerticalAlignment="Top"
+                            Cursor="SizeNWSE" Tag="NW"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Width="10" Height="10" Background="Transparent"
+                            HorizontalAlignment="Right"   VerticalAlignment="Top"
+                            Cursor="SizeNESW" Tag="NE"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Width="10" Height="10" Background="Transparent"
+                            HorizontalAlignment="Left"    VerticalAlignment="Bottom"
+                            Cursor="SizeNESW" Tag="SW"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Width="10" Height="10" Background="Transparent"
+                            HorizontalAlignment="Right"   VerticalAlignment="Bottom"
+                            Cursor="SizeNWSE" Tag="SE"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <!-- Edges -->
+                    <Border Height="6" Background="Transparent"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Top"    Margin="10,0,10,0"
+                            Cursor="SizeNS" Tag="N"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Height="6" Background="Transparent"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="10,0,10,0"
+                            Cursor="SizeNS" Tag="S"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Width="6" Background="Transparent"
+                            HorizontalAlignment="Left"    VerticalAlignment="Stretch" Margin="0,10,0,10"
+                            Cursor="SizeWE" Tag="W"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
+                    <Border Width="6" Background="Transparent"
+                            HorizontalAlignment="Right"   VerticalAlignment="Stretch" Margin="0,10,0,10"
+                            Cursor="SizeWE" Tag="E"
+                            MouseLeftButtonDown="OnResizeHandleMouseDown"
+                            MouseMove="OnResizeHandleMouseMove"
+                            MouseLeftButtonUp="OnResizeHandleMouseUp"/>
                 </Grid>
-            </Border>
-
-            <!-- Content area — icons placed here in Phase 5 -->
-            <Border Grid.Row="1" Background="Transparent"/>
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

@@ -78,6 +78,54 @@ public class ContainerService
         return true;
     }
 
+    // ── F-007 ────────────────────────────────────────────────────
+
+    /// <summary>Persists the container's updated position.  Call once on drag-end.</summary>
+    public void UpdatePosition(Guid id, double x, double y)
+    {
+        var c = Find(id);
+        if (c is null) return;
+        c.X         = x;
+        c.Y         = y;
+        c.UpdatedAt = DateTime.UtcNow;
+        _settings.Save();
+    }
+
+    // ── F-008 ────────────────────────────────────────────────────
+
+    public const double MinContainerWidth  = 120;
+    public const double MinContainerHeight = 80;
+
+    /// <summary>
+    /// Persists updated position and size.  Returns false if the new dimensions are
+    /// below the minimum; in that case nothing is saved.
+    /// </summary>
+    public bool Resize(Guid id, double x, double y, double width, double height)
+    {
+        if (width < MinContainerWidth || height < MinContainerHeight) return false;
+        var c = Find(id);
+        if (c is null) return false;
+        c.X         = x;
+        c.Y         = y;
+        c.Width     = width;
+        c.Height    = height;
+        c.UpdatedAt = DateTime.UtcNow;
+        _settings.Save();
+        return true;
+    }
+
+    // ── F-009 ────────────────────────────────────────────────────
+
+    /// <summary>Replaces the container's style and saves.</summary>
+    public void UpdateStyle(Guid id, ContainerStyle style)
+    {
+        var c = Find(id);
+        if (c is null) return;
+        c.Style     = style;
+        c.UpdatedAt = DateTime.UtcNow;
+        _settings.Save();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private Container? Find(Guid id) =>
