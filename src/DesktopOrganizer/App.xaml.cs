@@ -17,7 +17,9 @@ public partial class App : Application
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _pauseMenuItem;
     private bool _watcherPaused;
-    private SettingsService? _settingsService;
+    private SettingsService?       _settingsService;
+    private DesktopWatcherService? _watcherService;
+    private AutoOrganizeService?   _autoOrganize;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -39,6 +41,19 @@ public partial class App : Application
         var ruleService      = new RuleService(_settingsService);
         var mainVm           = new MainViewModel(containerService, ruleService, _settingsService);
 
+        // F-016 / F-017: desktop watcher + auto-organizer
+        _watcherService = new DesktopWatcherService();
+        _autoOrganize   = new AutoOrganizeService(
+            new DesktopReaderService(),
+            new ExclusionService(_settingsService.Config.Settings),
+            new FileClassifierService(),
+            ruleService,
+            _settingsService,
+            _watcherService,
+            new IconSortService(),
+            new IconOrderService(_settingsService));
+        _autoOrganize.Initialize();
+
         InitializeTrayIcon();
 
         var overlay = new Views.OverlayWindow(mainVm);
@@ -47,6 +62,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _autoOrganize?.Dispose();
+        _watcherService?.Dispose();
         _trayIcon?.Dispose();
         _mutex?.ReleaseMutex();
         _mutex?.Dispose();
@@ -103,6 +120,7 @@ public partial class App : Application
         if (_pauseMenuItem is not null)
             _pauseMenuItem.Text = _watcherPaused ? "감시 재개" : "감시 일시정지";
 
-        // Actual watcher start/stop will be wired in Phase 7
+        if (_watcherPaused) _watcherService?.Stop();
+        else                _watcherService?.Start();
     }
 }

@@ -12,8 +12,8 @@
 | 프로젝트명 | Desktop Organizer |
 | 목적 | Windows 바탕화면 아이콘을 Container와 Rule로 자동 관리하는 생산성 프로그램 |
 | 핵심 명세 문서 | `docs/03_FunctionSpec.md` (모든 기능의 단일 진실 공급원) |
-| 현재 Phase | **Phase 7** (Phase 6 완료) |
-| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리) |
+| 현재 Phase | **Phase 8** (Phase 7 완료) |
+| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리), Phase 7 (실시간 바탕화면 감시·새 파일 자동 정리) |
 
 ---
 
@@ -165,8 +165,8 @@ DesktopOrganizer/
 | F-013 | Rule 수정 | Must Have | ✅ 완료 |
 | F-014 | Rule 삭제 | Must Have | ✅ 완료 |
 | F-015 | Rule 우선순위 관리 | Must Have | ✅ 완료 |
-| F-016 | 실시간 바탕화면 감시 | Must Have | ⬜ 미완료 |
-| F-017 | 새 파일 자동 정리 | Must Have | ⬜ 미완료 |
+| F-016 | 실시간 바탕화면 감시 | Must Have | ✅ 완료 |
+| F-017 | 새 파일 자동 정리 | Must Have | ✅ 완료 |
 | F-018 | 설정 저장 | Must Have | ⬜ 미완료 |
 | F-019 | 설정 불러오기 | Must Have | ⬜ 미완료 |
 | F-020 | Layout 저장 | Should Have | ⬜ 미완료 |
@@ -197,4 +197,4 @@ DesktopOrganizer/
 ---
 
 *이 파일은 프로젝트가 진행되면서 지속적으로 업데이트된다.*
-*마지막 업데이트: 2026-07-23 — Phase 6 완료 (Rule CRUD + First-Match 엔진 + 드래그 재정렬, 168개 테스트 통과), Phase 7 시작 예정*
+*마지막 업데이트: 2026-07-23 — Phase 7 완료 (FileSystemWatcher 500ms 디바운싱 + 폴링 폴백, AutoOrganizeService Rule 매칭·Container 배치, 180개 테스트 통과), Phase 8 시작 예정*

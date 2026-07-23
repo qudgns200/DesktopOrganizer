@@ -15,6 +15,25 @@ public class DesktopReaderService
     // Metadata file that appears in every directory — never expose it as an icon
     private const string DesktopIni = "desktop.ini";
 
+    /// <summary>
+    /// Builds a single <see cref="IconInfo"/> for a file that already exists on the desktop.
+    /// Returns null for desktop.ini or if the entry cannot be read.
+    /// Icon position is looked up from the live desktop ListView.
+    /// </summary>
+    public IconInfo? BuildSingleIcon(string fullPath)
+    {
+        Dictionary<string, (int X, int Y)> positions;
+        try   { positions = DesktopIconInterop.ReadIconPositions(); }
+        catch { positions = new Dictionary<string, (int X, int Y)>(StringComparer.OrdinalIgnoreCase); }
+
+        try   { return BuildIconInfo(fullPath, positions); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[F-001] BuildSingleIcon failed for '{fullPath}': {ex.Message}");
+            return null;
+        }
+    }
+
     public List<IconInfo> ReadDesktopIcons()
     {
         var result = new List<IconInfo>();
