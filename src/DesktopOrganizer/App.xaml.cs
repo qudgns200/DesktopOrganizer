@@ -23,6 +23,7 @@ public partial class App : Application
     private LayoutService?         _layoutService;
     private DesktopWatcherService? _watcherService;
     private AutoOrganizeService?   _autoOrganize;
+    private MainViewModel?         _mainVm;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,8 +48,8 @@ public partial class App : Application
         var containerService = new ContainerService(_settingsService);
         var ruleService      = new RuleService(_settingsService);
         _layoutService       = new LayoutService(_settingsService);
-        var mainVm           = new MainViewModel(containerService, ruleService, _settingsService);
-        mainVm.SetLayoutService(_layoutService);
+        _mainVm              = new MainViewModel(containerService, ruleService, _settingsService);
+        _mainVm.SetLayoutService(_layoutService);
 
         // F-016 / F-017: desktop watcher + auto-organizer
         _watcherService = new DesktopWatcherService();
@@ -62,10 +63,11 @@ public partial class App : Application
             new IconSortService(),
             new IconOrderService(_settingsService));
         _autoOrganize.Initialize();
+        _mainVm.SetAutoOrganize(_autoOrganize);
 
         InitializeTrayIcon();
 
-        var overlay = new Views.OverlayWindow(mainVm);
+        var overlay = new Views.OverlayWindow(_mainVm);
         overlay.Show();
     }
 
@@ -97,12 +99,32 @@ public partial class App : Application
     {
         var menu = new ContextMenuStrip();
 
-        // 설정 열기 — dialog implemented in Phase 3+
-        var settingsItem = new ToolStripMenuItem("설정 열기");
-        settingsItem.Click += (_, _) => OnOpenSettingsClick();
-        menu.Items.Add(settingsItem);
+        // Container / Rule / Layout 관리
+        var newContainerItem = new ToolStripMenuItem("새 Container");
+        newContainerItem.Click += (_, _) => Dispatcher.Invoke(() =>
+            _mainVm?.CreateContainerAt(100, 100));
+        menu.Items.Add(newContainerItem);
 
-        // 감시 일시정지 / 재개 — watcher implemented in Phase 7
+        menu.Items.Add(new ToolStripSeparator());
+
+        var ruleItem = new ToolStripMenuItem("Rule 관리...");
+        ruleItem.Click += (_, _) => Dispatcher.Invoke(() =>
+            _mainVm?.OpenRuleManager());
+        menu.Items.Add(ruleItem);
+
+        var saveLayoutItem = new ToolStripMenuItem("Layout 저장...");
+        saveLayoutItem.Click += (_, _) => Dispatcher.Invoke(() =>
+            _mainVm?.SaveLayout());
+        menu.Items.Add(saveLayoutItem);
+
+        var manageLayoutItem = new ToolStripMenuItem("Layout 관리...");
+        manageLayoutItem.Click += (_, _) => Dispatcher.Invoke(() =>
+            _mainVm?.OpenLayoutManager());
+        menu.Items.Add(manageLayoutItem);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        // 감시 일시정지 / 재개
         _pauseMenuItem = new ToolStripMenuItem("감시 일시정지");
         _pauseMenuItem.Click += (_, _) => OnToggleWatcherClick();
         menu.Items.Add(_pauseMenuItem);
@@ -122,13 +144,6 @@ public partial class App : Application
         menu.Items.Add(exitItem);
 
         return menu;
-    }
-
-    private void OnOpenSettingsClick()
-    {
-        // Placeholder — settings dialog will be implemented in Phase 3
-        MessageBox.Show("설정 기능은 Phase 3에서 구현됩니다.", "Desktop Organizer",
-            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void OnOpenLogFileClick()

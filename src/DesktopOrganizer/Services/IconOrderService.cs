@@ -49,8 +49,12 @@ public class IconOrderService
         if (container is null || container.IconOrder.Count == 0)
             return AssignIndicesAndReturn(icons);
 
+        // Group by path to handle any duplicate entries that may have been persisted
+        // by a previous version of the app (duplicate check used reference equality).
         var savedIndex = container.IconOrder
-            .ToDictionary(e => e.IconPath, e => e.OrderIndex, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(e => e.IconPath, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Min(e => e.OrderIndex),
+                StringComparer.OrdinalIgnoreCase);
 
         var positioned   = new List<IconInfo>();
         var unpositioned = new List<IconInfo>();

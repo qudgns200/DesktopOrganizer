@@ -96,6 +96,88 @@ public class AutoOrganizeService : IDisposable
         LogService.Instance.Info("F-017", $"Initialized: {allIcons.Count} icons, {_containerIcons.Count} containers");
     }
 
+    /// <summary>
+    /// Applies all active rules to every current desktop icon.
+    /// Groups matching icons by container, then repositions each container in one batch.
+    /// Returns the number of icons actually repositioned on the desktop (Win32 success count).
+    /// </summary>
+    public int ApplyAllRules()
+    {
+        var allIcons = _reader.ReadDesktopIcons();
+        _exclusion.ApplyExclusion(allIcons);
+        _classifier.ClassifyAll(allIcons);
+
+        lock (_lock)
+        {
+            foreach (var icon in allIcons)
+                _icons[icon.FullPath] = icon;
+        }
+
+        // Group matching icons per container (avoids N separate Win32 calls)
+        var containerGroups = new Dictionary<Guid, (Container Container, List<IconInfo> NewIcons)>();
+        int matched = 0;
+
+        foreach (var icon in allIcons)
+        {
+            if (icon.IsSystemIcon) continue;
+            var rule = _rules.FindMatchingRule(icon);
+            if (rule is null) continue;
+            var container = _settings.Config.Containers
+                .FirstOrDefault(c => c.Id == rule.TargetContainerId);
+            if (container is null) continue;
+
+            if (!containerGroups.TryGetValue(container.Id, out var group))
+            {
+                group = (container, new List<IconInfo>());
+                containerGroups[container.Id] = group;
+            }
+            group.NewIcons.Add(icon);
+            matched++;
+        }
+
+        int totalMoved = 0;
+
+        foreach (var (containerId, (container, newIcons)) in containerGroups)
+        {
+            List<IconInfo> iconList;
+            lock (_lock)
+            {
+                if (!_containerIcons.TryGetValue(containerId, out iconList!))
+                {
+                    iconList = new List<IconInfo>();
+                    _containerIcons[containerId] = iconList;
+                }
+
+                foreach (var icon in newIcons)
+                {
+                    int idx = iconList.FindIndex(i =>
+                        string.Equals(i.FullPath, icon.FullPath, StringComparison.OrdinalIgnoreCase));
+                    if (idx < 0)
+                        iconList.Add(icon);
+                    else
+                        iconList[idx] = icon;
+
+                    icon.AssignedContainerId = containerId;
+                    _icons[icon.FullPath] = icon;
+                }
+            }
+
+            var sorted = _sortService.SortAndComputePositions(container, iconList);
+            var positions = BuildPositionDict(sorted);
+            int moved = WritePositions(positions);
+            totalMoved += moved;
+
+            _orderService.SaveIconOrder(containerId, sorted);
+
+            LogService.Instance.Info("F-017",
+                $"ApplyAllRules: container '{container.Name}' — {newIcons.Count} matched, {moved} repositioned on desktop");
+        }
+
+        LogService.Instance.Info("F-017",
+            $"ApplyAllRules complete: {matched}/{allIcons.Count} icons matched rules, {totalMoved} actually repositioned");
+        return totalMoved;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -267,8 +349,14 @@ public class AutoOrganizeService : IDisposable
                 _containerIcons[container.Id] = iconList;
             }
 
-            if (!iconList.Contains(icon))
+            // Use path-based deduplication — Contains uses reference equality which
+            // fails when ApplyAllRules creates fresh IconInfo objects for the same file.
+            int existingIdx = iconList.FindIndex(i =>
+                string.Equals(i.FullPath, icon.FullPath, StringComparison.OrdinalIgnoreCase));
+            if (existingIdx < 0)
                 iconList.Add(icon);
+            else
+                iconList[existingIdx] = icon;  // refresh metadata
 
             icon.AssignedContainerId = container.Id;
             _icons[icon.FullPath] = icon;
@@ -276,8 +364,57 @@ public class AutoOrganizeService : IDisposable
 
         // Sort + compute new positions (pure logic, no I/O)
         var sorted = _sortService.SortAndComputePositions(container, iconList);
+        WritePositions(BuildPositionDict(sorted));
+        _orderService.SaveIconOrder(container.Id, sorted);
 
-        // Build display-name → position map for Win32 call
+        LogService.Instance.Info("F-017", $"'{icon.FileName}' → container '{container.Name}' (rule matched)");
+    }
+
+    /// <summary>Repositions all icons assigned to <paramref name="containerId"/> after a container move/resize.</summary>
+    public void RepositionContainerIcons(Guid containerId)
+    {
+        var container = _settings.Config.Containers.FirstOrDefault(c => c.Id == containerId);
+        if (container is null) return;
+
+        List<IconInfo> snapshot;
+        lock (_lock)
+        {
+            if (!_containerIcons.TryGetValue(containerId, out var list) || list.Count == 0)
+                return;
+            snapshot = list.ToList();
+        }
+
+        var sorted = _sortService.SortAndComputePositions(container, snapshot);
+        int moved = WritePositions(BuildPositionDict(sorted));
+
+        // Persist updated positions back into the live list
+        lock (_lock)
+        {
+            if (_containerIcons.TryGetValue(containerId, out var live))
+            {
+                foreach (var ic in sorted)
+                {
+                    int idx = live.FindIndex(i =>
+                        string.Equals(i.FullPath, ic.FullPath, StringComparison.OrdinalIgnoreCase));
+                    if (idx >= 0) { live[idx].X = ic.X; live[idx].Y = ic.Y; }
+                }
+            }
+        }
+
+        LogService.Instance.Info("F-007",
+            $"RepositionContainerIcons '{container.Name}': {moved}/{snapshot.Count} repositioned");
+    }
+
+    /// <summary>
+    /// Writes icon positions to the desktop. Extracted for testability.
+    /// Returns the number of icons actually moved by Win32.
+    /// </summary>
+    protected virtual int WritePositions(Dictionary<string, (int X, int Y)> positions)
+        => DesktopIconInterop.WriteIconPositions(positions);
+
+    /// <summary>Builds a display-name → (X,Y) map from a sorted icon list.</summary>
+    private static Dictionary<string, (int X, int Y)> BuildPositionDict(IList<IconInfo> sorted)
+    {
         var positions = new Dictionary<string, (int X, int Y)>(StringComparer.OrdinalIgnoreCase);
         foreach (var ic in sorted)
         {
@@ -286,19 +423,8 @@ public class AutoOrganizeService : IDisposable
                 : ic.FileName;
             positions[displayName] = (ic.X, ic.Y);
         }
-
-        WritePositions(positions);
-
-        _orderService.SaveIconOrder(container.Id, sorted);
-
-        LogService.Instance.Info("F-017", $"'{icon.FileName}' → container '{container.Name}' (rule matched)");
+        return positions;
     }
-
-    /// <summary>
-    /// Writes icon positions to the desktop. Extracted for testability.
-    /// </summary>
-    protected virtual void WritePositions(Dictionary<string, (int X, int Y)> positions)
-        => DesktopIconInterop.WriteIconPositions(positions);
 
     // ── Internal helpers ──────────────────────────────────────────
 

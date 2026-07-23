@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Rule 관리"
         Width="580" Height="480"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         Background="#F5F5F5">
 
     <Grid Margin="12">
@@ -63,11 +63,11 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0">
                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"/>
                             <TextBlock FontSize="11" Foreground="#777">
-                                <Run Text="{Binding ConditionCount, StringFormat='조건 {0}개'}"/>
+                                <Run Text="{Binding ConditionCount, StringFormat='조건 {0}개', Mode=OneWay}"/>
                                 <Run Text=" → "/>
-                                <Run Text="{Binding TargetContainerName}"/>
+                                <Run Text="{Binding TargetContainerName, Mode=OneWay}"/>
                                 <Run Text=" "/>
-                                <Run Text="{Binding StatusText}" Foreground="{Binding StatusColor}"/>
+                                <Run Text="{Binding StatusText, Mode=OneWay}" Foreground="{Binding StatusColor, Mode=OneWay}"/>
                             </TextBlock>
                         </StackPanel>
 

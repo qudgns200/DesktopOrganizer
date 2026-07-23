@@ -101,6 +101,8 @@ public class ContainerViewModel : ObservableObject
 
     public event EventHandler? DeleteRequested;
     public event EventHandler? EditStyleRequested;
+    /// <summary>Raised after position or size is committed to storage (drag-end, resize-end).</summary>
+    public event EventHandler? GeometryCommitted;
 
     // ── F-005 Rename ─────────────────────────────────────────────
 
@@ -132,8 +134,12 @@ public class ContainerViewModel : ObservableObject
         OnPropertyChanged(nameof(Y));
     }
 
-    /// <summary>Persists the current position (call on drag-end).</summary>
-    public void CommitPosition() => _service.UpdatePosition(Id, _model.X, _model.Y);
+    /// <summary>Persists the current position (call on drag-end) and raises <see cref="GeometryCommitted"/>.</summary>
+    public void CommitPosition()
+    {
+        _service.UpdatePosition(Id, _model.X, _model.Y);
+        GeometryCommitted?.Invoke(this, EventArgs.Empty);
+    }
 
     // ── F-008 Resize ─────────────────────────────────────────────
 
@@ -146,9 +152,12 @@ public class ContainerViewModel : ObservableObject
         OnPropertyChanged(nameof(Width)); OnPropertyChanged(nameof(Height));
     }
 
-    /// <summary>Persists the current size (call on resize-end).</summary>
-    public void CommitSize() =>
+    /// <summary>Persists the current size (call on resize-end) and raises <see cref="GeometryCommitted"/>.</summary>
+    public void CommitSize()
+    {
         _service.Resize(Id, _model.X, _model.Y, _model.Width, _model.Height);
+        GeometryCommitted?.Invoke(this, EventArgs.Empty);
+    }
 
     // ── F-009 Style ──────────────────────────────────────────────
 
@@ -175,6 +184,6 @@ public class ContainerViewModel : ObservableObject
 
     // ── Private helpers ───────────────────────────────────────────
 
-    private void RequestDelete()     => DeleteRequested?.Invoke(this, EventArgs.Empty);
-    private void RequestEditStyle()  => EditStyleRequested?.Invoke(this, EventArgs.Empty);
+    private void RequestDelete()    => DeleteRequested?.Invoke(this, EventArgs.Empty);
+    private void RequestEditStyle() => EditStyleRequested?.Invoke(this, EventArgs.Empty);
 }

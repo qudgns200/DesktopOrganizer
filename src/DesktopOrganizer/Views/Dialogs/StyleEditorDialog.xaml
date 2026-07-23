@@ -7,7 +7,7 @@
         WindowStyle="ToolWindow"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
         <conv:StringToBrushConverter         x:Key="StringToBrush"/>

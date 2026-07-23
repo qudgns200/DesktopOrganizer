@@ -208,8 +208,27 @@ public class RuleService
                 StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool MatchesCategory(FileCategory category, RuleCondition condition) =>
-        Enum.TryParse<FileCategory>(condition.Value, ignoreCase: true, out var cat) && cat == category;
+    private static bool MatchesCategory(FileCategory category, RuleCondition condition)
+    {
+        if (string.IsNullOrWhiteSpace(condition.Value))
+        {
+            // Empty value means the rule was saved before the ToModel() fix.
+            // Log a warning so the user can find and recreate the rule.
+            LogService.Instance.Warn("F-012",
+                "FileCategory condition has empty Value — rule was likely saved by an older version. " +
+                "Please delete and recreate this rule.");
+            return false;
+        }
+
+        if (!Enum.TryParse<FileCategory>(condition.Value, ignoreCase: true, out var cat))
+        {
+            LogService.Instance.Warn("F-012",
+                $"FileCategory condition has unrecognised value '{condition.Value}' — skipping.");
+            return false;
+        }
+
+        return cat == category;
+    }
 
     private static bool MatchesDateRange(DateTime date, RuleCondition condition)
     {

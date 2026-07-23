@@ -4,7 +4,7 @@
         Title="Layout 저장"
         Width="360" SizeToContent="Height"
         ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False">
 
     <StackPanel Margin="16">

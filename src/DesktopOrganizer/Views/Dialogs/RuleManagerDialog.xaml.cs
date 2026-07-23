@@ -23,6 +23,7 @@ public partial class RuleManagerDialog : Window
 {
     private readonly RuleService    _ruleService;
     private readonly SettingsService _settings;
+    private readonly Func<int>?     _onApplyRules;
 
     private RuleListItemViewModel? _dragSource;
     private Point                  _dragStartPoint;
@@ -30,12 +31,13 @@ public partial class RuleManagerDialog : Window
 
     public ObservableCollection<RuleListItemViewModel> Rules { get; } = new();
 
-    public RuleManagerDialog(RuleService ruleService, SettingsService settings)
+    public RuleManagerDialog(RuleService ruleService, SettingsService settings, Func<int>? onApplyRules = null)
     {
-        _ruleService = ruleService;
-        _settings    = settings;
+        _ruleService  = ruleService;
+        _settings     = settings;
+        _onApplyRules = onApplyRules;
         InitializeComponent();
-        DataContext  = this;
+        DataContext   = this;
         LoadRules();
     }
 
@@ -78,8 +80,8 @@ public partial class RuleManagerDialog : Window
 
         var ask = MessageBox.Show("새 Rule을 기존 바탕화면 아이콘에 즉시 적용하시겠습니까?",
             "즉시 적용", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        // Actual re-apply is handled in Phase 7 (AutoOrganizeService). Log intent only.
-        _ = ask;
+        if (ask == MessageBoxResult.Yes)
+            InvokeAndShowResult();
 
         LoadRules();
     }
@@ -102,9 +104,29 @@ public partial class RuleManagerDialog : Window
 
         var ask = MessageBox.Show("수정된 Rule을 기존 바탕화면 아이콘에 재적용하시겠습니까?",
             "재적용", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        _ = ask;
+        if (ask == MessageBoxResult.Yes)
+            InvokeAndShowResult();
 
         LoadRules();
+    }
+
+    private void InvokeAndShowResult()
+    {
+        try
+        {
+            int count = _onApplyRules?.Invoke() ?? 0;
+            var msg = count > 0
+                ? $"{count}개 아이콘이 Rule에 따라 배치됐습니다."
+                : "Rule과 일치하는 아이콘이 바탕화면에 없습니다.\n(이후 바탕화면에 파일이 추가되면 자동으로 적용됩니다.)";
+            MessageBox.Show(msg, "적용 결과", MessageBoxButton.OK,
+                count > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Error("F-017", $"ApplyAllRules failed: {ex.Message}");
+            MessageBox.Show($"적용 중 오류가 발생했습니다.\n{ex.Message}", "오류",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     // ── F-014: Delete ─────────────────────────────────────────────

@@ -3,14 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:DesktopOrganizer.ViewModels"
         xmlns:models="clr-namespace:DesktopOrganizer.Models"
+        xmlns:conv="clr-namespace:DesktopOrganizer.Views.Converters"
         Title="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"
-        Width="560" MinHeight="480" SizeToContent="Height"
+        Width="580" MinHeight="480" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#F5F5F5">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:ConditionTypeDisplayConverter  x:Key="CondTypeConv"/>
+        <conv:PatternMatchTypeDisplayConverter x:Key="PatternConv"/>
+        <conv:FileCategoryDisplayConverter   x:Key="FileCatConv"/>
+
         <Style TargetType="Label">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -94,7 +99,7 @@
         </Grid>
 
         <!-- 조건 항목들 -->
-        <ScrollViewer Grid.Row="5" MaxHeight="300" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+        <ScrollViewer Grid.Row="5" MaxHeight="340" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
             <ItemsControl ItemsSource="{Binding Conditions}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:RuleConditionViewModel}">
@@ -102,6 +107,7 @@
                                 Margin="0,0,0,6" Padding="8">
                             <Grid>
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
@@ -113,8 +119,14 @@
                                 <!-- 조건 유형 -->
                                 <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,4">
                                     <Label Content="유형:" Width="40" Padding="0,2"/>
-                                    <ComboBox Width="160" SelectedItem="{Binding Type}"
-                                              ItemsSource="{Binding ConditionTypes}"/>
+                                    <ComboBox Width="150" SelectedItem="{Binding Type}"
+                                              ItemsSource="{Binding ConditionTypes}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource CondTypeConv}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </StackPanel>
 
                                 <!-- 삭제 버튼 -->
@@ -126,44 +138,69 @@
 
                                 <!-- 조건 값 — 파일명 패턴 -->
                                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                            Orientation="Horizontal"
+                                            Orientation="Vertical" Margin="0,2,0,0"
                                             Visibility="{Binding IsFileNamePattern, Converter={StaticResource BoolToVis}}">
-                                    <Label Content="방식:" Width="40" Padding="0,2"/>
-                                    <ComboBox Width="110" SelectedItem="{Binding PatternMatchType}"
-                                              ItemsSource="{Binding PatternMatchTypes}" Margin="0,0,8,0"/>
-                                    <Label Content="패턴:" Width="40" Padding="0,2"/>
-                                    <TextBox Width="220" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Label Content="방식:" Width="40" Padding="0,2"/>
+                                        <ComboBox Width="120" SelectedItem="{Binding PatternMatchType}"
+                                                  ItemsSource="{Binding PatternMatchTypes}" Margin="0,0,8,0">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={StaticResource PatternConv}}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Label Content="패턴:" Width="40" Padding="0,2"/>
+                                        <TextBox Width="200" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+                                    <!-- PatternMatchType 힌트 -->
+                                    <TextBlock Text="{Binding PatternHint}"
+                                               FontSize="10.5" Foreground="#5577BB"
+                                               Margin="40,3,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
 
                                 <!-- 조건 값 — 확장자 -->
                                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                            Orientation="Horizontal"
+                                            Orientation="Horizontal" Margin="0,2,0,0"
                                             Visibility="{Binding IsExtension, Converter={StaticResource BoolToVis}}">
                                     <Label Content="확장자:" Width="50" Padding="0,2"/>
-                                    <TextBox Width="340" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                    <TextBox Width="360" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
                                              ToolTip="쉼표로 구분 (예: .pdf, .docx)"/>
                                 </StackPanel>
 
                                 <!-- 조건 값 — 파일 유형 -->
                                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                            Orientation="Horizontal"
+                                            Orientation="Horizontal" Margin="0,2,0,0"
                                             Visibility="{Binding IsFileCategory, Converter={StaticResource BoolToVis}}">
-                                    <Label Content="유형:" Width="40" Padding="0,2"/>
-                                    <ComboBox Width="200" SelectedItem="{Binding SelectedCategory}"
-                                              ItemsSource="{Binding FileCategories}"/>
+                                    <Label Content="종류:" Width="40" Padding="0,2"/>
+                                    <ComboBox Width="260" SelectedItem="{Binding SelectedCategory}"
+                                              ItemsSource="{Binding FileCategories}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource FileCatConv}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </StackPanel>
 
                                 <!-- 조건 값 — 날짜 범위 -->
                                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                            Orientation="Horizontal"
+                                            Orientation="Horizontal" Margin="0,2,0,0"
                                             Visibility="{Binding IsDateRange, Converter={StaticResource BoolToVis}}">
                                     <Label Content="시작:" Width="40" Padding="0,2"/>
                                     <TextBox Width="120" Text="{Binding DateFrom, UpdateSourceTrigger=PropertyChanged}"
-                                             ToolTip="yyyy-MM-dd" Margin="0,0,8,0"/>
+                                             ToolTip="yyyy-MM-dd (비워두면 제한 없음)" Margin="0,0,8,0"/>
                                     <Label Content="종료:" Width="40" Padding="0,2"/>
                                     <TextBox Width="120" Text="{Binding DateTo, UpdateSourceTrigger=PropertyChanged}"
-                                             ToolTip="yyyy-MM-dd"/>
+                                             ToolTip="yyyy-MM-dd (비워두면 제한 없음)"/>
                                 </StackPanel>
+
+                                <!-- 유형 힌트 (Row 2) -->
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2"
+                                           Text="{Binding TypeHint}"
+                                           FontSize="10.5" Foreground="#777777"
+                                           Margin="0,4,0,0" TextWrapping="Wrap"/>
+
                             </Grid>
                         </Border>
                     </DataTemplate>

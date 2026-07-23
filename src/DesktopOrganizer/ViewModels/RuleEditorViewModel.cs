@@ -84,6 +84,15 @@ public class RuleEditorViewModel : ObservableObject
             return (false, "Rule 이름을 입력하세요.");
         if (Conditions.Count == 0)
             return (false, "조건을 하나 이상 추가하세요.");
+
+        foreach (var c in Conditions)
+        {
+            if (c.Type == ConditionType.FileNamePattern && string.IsNullOrWhiteSpace(c.Value))
+                return (false, "파일명 패턴 조건의 패턴 값을 입력하세요.");
+            if (c.Type == ConditionType.Extension && string.IsNullOrWhiteSpace(c.Value))
+                return (false, "확장자 조건의 확장자 값을 입력하세요. (예: .pdf, .docx)");
+        }
+
         if (TargetContainerId is null)
             return (false, "대상 Container를 선택하세요.");
         return (true, string.Empty);

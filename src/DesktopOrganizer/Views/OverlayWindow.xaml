@@ -8,8 +8,7 @@
         Background="Transparent"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        Left="0" Top="0"
-        Topmost="True">
+        Left="0" Top="0">
 
     <!--
         Root Grid has Background="Transparent" so it participates in hit testing,
@@ -18,19 +17,7 @@
         HTTRANSPARENT by the WndProc hook, so left-clicks pass through to the desktop.
     -->
     <Grid x:Name="OverlayRoot"
-          Background="Transparent"
-          PreviewMouseRightButtonDown="OnPreviewMouseRightButtonDown">
-
-        <Grid.ContextMenu>
-            <ContextMenu>
-                <MenuItem Header="새 Container" Click="OnCreateContainerMenuClick"/>
-                <Separator/>
-                <MenuItem Header="Rule 관리..." Click="OnOpenRuleManagerMenuClick"/>
-                <Separator/>
-                <MenuItem Header="Layout 저장..." Click="OnSaveLayoutMenuClick"/>
-                <MenuItem Header="Layout 관리..." Click="OnOpenLayoutManagerMenuClick"/>
-            </ContextMenu>
-        </Grid.ContextMenu>
+          Background="Transparent">
 
         <!-- Container layer — absolute positioning via Canvas inside ItemsControl -->
         <ItemsControl ItemsSource="{Binding Containers}">

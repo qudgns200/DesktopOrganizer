@@ -8,14 +8,13 @@ using DesktopOrganizer.Views.Controls;
 using Microsoft.Win32;
 // UseWindowsForms=true: resolve ambiguities with WinForms types
 using ContainerControl = DesktopOrganizer.Views.Controls.ContainerControl;
-using Point            = System.Windows.Point;
+using Cursors           = System.Windows.Input.Cursors;
+using Point             = System.Windows.Point;
 
 namespace DesktopOrganizer.Views;
 
 public partial class OverlayWindow : Window
 {
-    private Point _lastRightClickPosition;
-
     public OverlayWindow(MainViewModel viewModel)
     {
         InitializeComponent();
@@ -29,8 +28,15 @@ public partial class OverlayWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
-        source?.AddHook(WndProc);
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+
+        // Prevent the overlay from stealing focus or rising above other windows when clicked.
+        int exStyle = WindowInterop.GetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE);
+        WindowInterop.SetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE,
+            exStyle | WindowInterop.WS_EX_NOACTIVATE);
+
+        HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -55,9 +61,9 @@ public partial class OverlayWindow : Window
     // ── Mouse pass-through ───────────────────────────────────────
 
     /// <summary>
-    /// Returns HTTRANSPARENT so left-clicks on empty overlay areas pass through
-    /// to the desktop.  Right-clicks are NOT passed through so WPF can show the
-    /// context menu for F-004 (new Container).
+    /// Returns HTTRANSPARENT for empty overlay areas so all mouse events
+    /// (left and right clicks) pass through to the desktop.
+    /// Container areas return HTCLIENT so WPF handles Container interactions.
     /// </summary>
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
@@ -66,10 +72,6 @@ public partial class OverlayWindow : Window
 
         var defaultResult = WindowInterop.DefWindowProc(hwnd, msg, wParam, lParam);
         if (defaultResult.ToInt32() != WindowInterop.HTCLIENT)
-            return defaultResult;
-
-        // Keep HTCLIENT during right-clicks so WPF can open the context menu
-        if (WindowInterop.GetAsyncKeyState(WindowInterop.VK_RBUTTON) < 0)
             return defaultResult;
 
         var screenX      = WindowInterop.SignedLoWord(lParam);
@@ -85,49 +87,55 @@ public partial class OverlayWindow : Window
         return defaultResult;
     }
 
-    /// <summary>Walks the visual tree to find whether a ContainerControl is under the cursor.</summary>
+    /// <summary>
+    /// Returns true only when the cursor is over an interactive part of a ContainerControl:
+    /// the title bar (Cursor=SizeAll) or a resize handle (SizeNWSE / SizeNESW / SizeNS / SizeWE).
+    /// The container body is left transparent so desktop icons underneath can be interacted with.
+    /// </summary>
     private bool IsOverContainer(Point logicalPoint)
     {
         var result = VisualTreeHelper.HitTest(this, logicalPoint);
         if (result is null) return false;
 
+        // Walk from the hit element up to the ContainerControl boundary
         var element = result.VisualHit as DependencyObject;
+        bool insideContainer = false;
+
         while (element is not null)
         {
-            if (element is ContainerControl) return true;
+            if (element is ContainerControl)
+            {
+                insideContainer = true;
+                break;
+            }
             element = VisualTreeHelper.GetParent(element);
         }
+
+        if (!insideContainer) return false;
+
+        // Only capture mouse for interactive parts (title bar / resize handles),
+        // identified by the cursor assigned in ContainerControl.xaml.
+        return IsInteractiveContainerPart(result.VisualHit as DependencyObject);
+    }
+
+    private static bool IsInteractiveContainerPart(DependencyObject? hit)
+    {
+        var el = hit;
+        while (el is not null)
+        {
+            if (el is FrameworkElement fe)
+            {
+                var cursor = fe.Cursor;
+                if (cursor == Cursors.SizeAll   ||   // title bar drag handle
+                    cursor == Cursors.SizeNWSE  ||   // corner resize
+                    cursor == Cursors.SizeNESW  ||
+                    cursor == Cursors.SizeNS    ||   // edge resize
+                    cursor == Cursors.SizeWE)
+                    return true;
+            }
+            if (el is ContainerControl) break;
+            el = VisualTreeHelper.GetParent(el);
+        }
         return false;
-    }
-
-    // ── Context menu handlers (F-004, F-012~F-015) ──────────────
-
-    private void OnPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _lastRightClickPosition = e.GetPosition(OverlayRoot);
-    }
-
-    private void OnCreateContainerMenuClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-            vm.CreateContainerAt(_lastRightClickPosition.X, _lastRightClickPosition.Y);
-    }
-
-    private void OnOpenRuleManagerMenuClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-            vm.OpenRuleManager(this);
-    }
-
-    private void OnSaveLayoutMenuClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-            vm.SaveLayout(this);
-    }
-
-    private void OnOpenLayoutManagerMenuClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-            vm.OpenLayoutManager(this);
     }
 }

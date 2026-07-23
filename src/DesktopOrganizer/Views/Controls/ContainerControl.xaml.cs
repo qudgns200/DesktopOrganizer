@@ -202,7 +202,7 @@ public partial class ContainerControl : UserControl
     private void OnEditStyleRequested(object? sender, EventArgs e)
     {
         if (_vm == null) return;
-        var dialog = new StyleEditorDialog(_vm.Style) { Owner = Window.GetWindow(this) };
+        var dialog = new StyleEditorDialog(_vm.Style);
         if (dialog.ShowDialog() == true)
             _vm.ApplyStyle(dialog.ResultStyle);
     }

@@ -15,6 +15,7 @@ public class MainViewModel : ObservableObject
     private readonly RuleService      _ruleService;
     private readonly SettingsService  _settings;
     private LayoutService?            _layoutService;
+    private AutoOrganizeService?      _autoOrganize;
     private bool _watcherEnabled = true;
 
     public MainViewModel(ContainerService containerService,
@@ -30,6 +31,9 @@ public class MainViewModel : ObservableObject
     /// <summary>Injected after construction to avoid circular dependency.</summary>
     public void SetLayoutService(LayoutService layoutService)
         => _layoutService = layoutService;
+
+    public void SetAutoOrganize(AutoOrganizeService svc)
+        => _autoOrganize = svc;
 
     public ObservableCollection<ContainerViewModel> Containers { get; } = new();
 
@@ -61,26 +65,30 @@ public class MainViewModel : ObservableObject
     private ContainerViewModel WrapContainer(Container model)
     {
         var vm = new ContainerViewModel(model, _containerService);
-        vm.DeleteRequested += OnDeleteRequested;
+        vm.DeleteRequested    += OnDeleteRequested;
+        vm.GeometryCommitted  += OnGeometryCommitted;
         return vm;
     }
 
     // ── F-012 ~ F-015: Rule manager ──────────────────────────────
 
     /// <summary>Opens the Rule management dialog (F-012~F-015).</summary>
-    public void OpenRuleManager(Window owner)
+    public void OpenRuleManager()
     {
-        var dialog = new RuleManagerDialog(_ruleService, _settings) { Owner = owner };
+        var dialog = new RuleManagerDialog(_ruleService, _settings, ApplyAllRules);
         dialog.ShowDialog();
     }
 
+    /// <summary>Applies all active rules and returns the number of repositioned icons.</summary>
+    public int ApplyAllRules() => _autoOrganize?.ApplyAllRules() ?? 0;
+
     // ── F-020: Save layout ───────────────────────────────────────
 
-    public void SaveLayout(Window owner)
+    public void SaveLayout()
     {
         if (_layoutService is null) return;
 
-        var nameDialog = new LayoutNameDialog { Owner = owner };
+        var nameDialog = new LayoutNameDialog();
         if (nameDialog.ShowDialog() != true || nameDialog.ResultName is null) return;
 
         var name = nameDialog.ResultName;
@@ -109,10 +117,10 @@ public class MainViewModel : ObservableObject
 
     // ── F-021: Open layout manager ───────────────────────────────
 
-    public void OpenLayoutManager(Window owner)
+    public void OpenLayoutManager()
     {
         if (_layoutService is null) return;
-        var dialog = new LayoutManagerDialog(_layoutService, this) { Owner = owner };
+        var dialog = new LayoutManagerDialog(_layoutService, this);
         dialog.ShowDialog();
     }
 
@@ -134,7 +142,11 @@ public class MainViewModel : ObservableObject
             currentDesktopIcons: Array.Empty<IconInfo>());
 
         // Rebuild the ViewModel collection from the updated settings
-        foreach (var vm in Containers) vm.DeleteRequested -= OnDeleteRequested;
+        foreach (var vm in Containers)
+        {
+            vm.DeleteRequested   -= OnDeleteRequested;
+            vm.GeometryCommitted -= OnGeometryCommitted;
+        }
         Containers.Clear();
         LoadContainers();
 
@@ -157,6 +169,15 @@ public class MainViewModel : ObservableObject
 
         _containerService.Delete(vm.Id);
         Containers.Remove(vm);
-        vm.DeleteRequested -= OnDeleteRequested;
+        vm.DeleteRequested   -= OnDeleteRequested;
+        vm.GeometryCommitted -= OnGeometryCommitted;
+    }
+
+    // ── F-007: Reposition icons after container move/resize ──────
+
+    private void OnGeometryCommitted(object? sender, EventArgs e)
+    {
+        if (sender is not ContainerViewModel vm) return;
+        _autoOrganize?.RepositionContainerIcons(vm.Id);
     }
 }

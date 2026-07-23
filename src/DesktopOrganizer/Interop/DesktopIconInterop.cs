@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using DesktopOrganizer.Services;
 
 namespace DesktopOrganizer.Interop;
 
@@ -12,12 +14,16 @@ namespace DesktopOrganizer.Interop;
 internal static class DesktopIconInterop
 {
     // ListView messages
-    private const int LVM_FIRST             = 0x1000;
-    private const int LVM_GETITEMCOUNT      = LVM_FIRST + 4;
-    private const int LVM_GETITEMPOSITION   = LVM_FIRST + 16;
-    private const int LVM_SETITEMPOSITION32 = LVM_FIRST + 167;  // 32-bit coords (high-DPI safe)
-    private const int LVM_GETITEMW          = LVM_FIRST + 75;
-    private const uint LVIF_TEXT            = 0x0001;
+    private const int LVM_FIRST            = 0x1000;
+    private const int LVM_GETITEMCOUNT     = LVM_FIRST + 4;
+    private const int LVM_GETITEMPOSITION  = LVM_FIRST + 16;
+    private const int LVM_SETITEMPOSITION  = LVM_FIRST + 15;   // MAKELONG(x,y) — works cross-process
+    private const int LVM_GETITEMW         = LVM_FIRST + 75;
+    private const uint LVIF_TEXT           = 0x0001;
+
+    // Window style constants for auto-arrange detection
+    private const int GWL_STYLE        = -16;
+    private const int LVS_AUTOARRANGE  = 0x0100;
 
     // Process access rights
     private const uint PROCESS_VM_READ = 0x0010;
@@ -60,6 +66,8 @@ internal static class DesktopIconInterop
     [DllImport("user32.dll", CharSet = CharSet.Auto)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? cls, string? wnd);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] private static extern uint GetDpiForSystem();
 
     [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
@@ -70,23 +78,33 @@ internal static class DesktopIconInterop
 
     /// <summary>
     /// Moves desktop icons to the coordinates in <paramref name="positions"/> (display name → position).
-    /// Silently skips names not found in the ListView.
-    /// Uses LVM_SETITEMPOSITION32 (32-bit POINT) so coordinates above 32 767 work correctly on
-    /// high-DPI displays.  Does NOT move, copy, or delete any file system entries.
+    /// Coordinates are in WPF DIPs; this method converts them to physical pixels using system DPI.
+    /// Uses LVM_SETITEMPOSITION with MAKELONG encoding — works reliably across all Windows versions.
+    /// Does NOT move, copy, or delete any file system entries.
+    /// Returns the number of icons whose positions were actually sent to the desktop ListView.
     /// </summary>
-    public static void WriteIconPositions(Dictionary<string, (int X, int Y)> positions)
+    public static int WriteIconPositions(Dictionary<string, (int X, int Y)> positions)
     {
-        if (positions.Count == 0) return;
+        if (positions.Count == 0) return 0;
 
         var listView = FindDesktopListView();
         if (listView == IntPtr.Zero)
         {
-            Debug.WriteLine("[DesktopIconInterop] WriteIconPositions: ListView handle not found");
-            return;
+            LogService.Instance.Warn("Interop", "WriteIconPositions: desktop ListView handle not found");
+            return 0;
         }
 
         int count = (int)SendMessage(listView, LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero);
-        if (count <= 0) return;
+        if (count <= 0) return 0;
+
+        // Warn if auto-arrange is enabled — positions will snap back immediately
+        int lvStyle = GetWindowLong(listView, GWL_STYLE);
+        if ((lvStyle & LVS_AUTOARRANGE) != 0)
+        {
+            LogService.Instance.Warn("Interop",
+                "WriteIconPositions: LVS_AUTOARRANGE is set on the desktop — " +
+                "icons will snap back. Disable 'Auto arrange icons' on the desktop.");
+        }
 
         GetWindowThreadProcessId(listView, out uint pid);
         var hProcess = OpenProcess(
@@ -95,35 +113,106 @@ internal static class DesktopIconInterop
 
         if (hProcess == IntPtr.Zero)
         {
-            Debug.WriteLine($"[DesktopIconInterop] WriteIconPositions: OpenProcess failed (PID={pid})");
-            return;
+            LogService.Instance.Error("Interop",
+                $"WriteIconPositions: OpenProcess failed (PID={pid}, " +
+                $"LastError={Marshal.GetLastWin32Error()})");
+            return 0;
         }
 
+        // DPI scale: container positions are in WPF DIPs; listview expects physical pixels
+        double dpiScale = GetDpiForSystem() / 96.0;
+
+        // Pre-normalize positions keys to NFC so Korean/CJK names match regardless of
+        // whether the filesystem or SysListView32 returned NFC vs NFD Unicode form.
+        // Value = (original key in positions dict, the position).
+        var nfcLookup = new Dictionary<string, (string OriginalKey, (int X, int Y) Pos)>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var kvp in positions)
+            nfcLookup[kvp.Key.Normalize(NormalizationForm.FormC)] = (kvp.Key, kvp.Value);
+
+        int moved = 0;
         try
         {
             int  textBytes = MAX_ICON_NAME * sizeof(char);
             nint lvSize    = Marshal.SizeOf<LVITEM>();
-            nint ptSize    = Marshal.SizeOf<POINT>();
-            nint total     = lvSize + ptSize + textBytes;
+            nint total     = lvSize + textBytes;   // no remote POINT needed for MAKELONG encoding
 
             var remote = VirtualAllocEx(hProcess, IntPtr.Zero, total, MEM_COMMIT, PAGE_READWRITE);
-            if (remote == IntPtr.Zero) return;
+            if (remote == IntPtr.Zero)
+            {
+                LogService.Instance.Error("Interop", "WriteIconPositions: VirtualAllocEx failed");
+                return 0;
+            }
 
             try
             {
                 var remoteLv  = remote;
-                var remotePt  = remote + (int)lvSize;
-                var remoteTxt = remote + (int)lvSize + (int)ptSize;
+                var remoteTxt = remote + (int)lvSize;
+
+                // Track which original position keys were matched (for unmatched logging)
+                var matched   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                // Collect all ListView names for diagnostic logging when items are unmatched
+                var lvNames   = new List<string>(count);
 
                 for (int i = 0; i < count; i++)
                 {
-                    var name = ReadItemText(hProcess, listView, i, remoteLv, remoteTxt, textBytes);
-                    if (!positions.TryGetValue(name, out var pos)) continue;
+                    var raw = ReadItemText(hProcess, listView, i, remoteLv, remoteTxt, textBytes);
+                    if (string.IsNullOrEmpty(raw)) continue;
 
-                    var pt      = new POINT { X = pos.X, Y = pos.Y };
-                    var ptBytes = ToBytes(pt);
-                    WriteProcessMemory(hProcess, remotePt, ptBytes, ptBytes.Length, out _);
-                    SendMessage(listView, LVM_SETITEMPOSITION32, new IntPtr(i), remotePt);
+                    lvNames.Add(raw);
+
+                    // Normalise to NFC: handles Korean NFC/NFD differences between the
+                    // filesystem name and the SysListView32 display string.
+                    var name = raw.Normalize(NormalizationForm.FormC);
+
+                    string? matchedKey  = null;
+                    (int X, int Y) pos  = default;
+
+                    // 1) Exact NFC match
+                    if (nfcLookup.TryGetValue(name, out var exact))
+                    {
+                        pos        = exact.Pos;
+                        matchedKey = exact.OriginalKey;
+                    }
+                    else
+                    {
+                        // 2) Extension-stripped fallback: Windows hides known-type extensions
+                        //    so the ListView shows "report" while our key is "report.pdf".
+                        var fallback = nfcLookup.FirstOrDefault(kvp =>
+                            Path.GetFileNameWithoutExtension(kvp.Key)
+                                .Equals(name, StringComparison.OrdinalIgnoreCase));
+                        if (fallback.Key is not null)
+                        {
+                            pos        = fallback.Value.Pos;
+                            matchedKey = fallback.Value.OriginalKey;
+                        }
+                    }
+
+                    if (matchedKey is null) continue;
+                    matched.Add(matchedKey);
+
+                    // Convert WPF DIP → physical pixels, then pack into MAKELONG(x, y)
+                    int physX = (int)Math.Round(pos.X * dpiScale);
+                    int physY = (int)Math.Round(pos.Y * dpiScale);
+                    // Cast via uint to avoid CS0675 sign-extension warning
+                    long lp = (long)(uint)(physX & 0xFFFF) | ((long)(uint)(physY & 0xFFFF) << 16);
+
+                    SendMessage(listView, LVM_SETITEMPOSITION, new IntPtr(i), new IntPtr(lp));
+                    moved++;
+                }
+
+                // Report unmatched items; also dump the ListView names at Debug level
+                // so the exact strings can be compared against positions keys in the log.
+                var unmatched = positions.Keys.Where(k => !matched.Contains(k)).ToList();
+                if (unmatched.Count > 0)
+                {
+                    LogService.Instance.Debug("Interop",
+                        $"WriteIconPositions: SysListView32 returned {lvNames.Count} names: " +
+                        string.Join(", ", lvNames.Select(n => $"'{n}'")));
+                    foreach (var key in unmatched)
+                        LogService.Instance.Warn("Interop",
+                            $"WriteIconPositions: '{key}' not found in desktop ListView " +
+                            "(may be hidden, name-mismatch, or different Unicode form)");
                 }
             }
             finally
@@ -136,7 +225,9 @@ internal static class DesktopIconInterop
             CloseHandle(hProcess);
         }
 
-        Debug.WriteLine($"[DesktopIconInterop] Wrote positions for {positions.Count} icon(s)");
+        LogService.Instance.Info("Interop",
+            $"WriteIconPositions: repositioned {moved}/{positions.Count} icon(s) (DPI scale {dpiScale:F2})");
+        return moved;
     }
 
     /// <summary>

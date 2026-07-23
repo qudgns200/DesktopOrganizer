@@ -34,6 +34,7 @@ public class RuleConditionViewModel : ObservableObject
             OnPropertyChanged(nameof(IsExtension));
             OnPropertyChanged(nameof(IsFileCategory));
             OnPropertyChanged(nameof(IsDateRange));
+            OnPropertyChanged(nameof(TypeHint));
         }
     }
 
@@ -46,7 +47,11 @@ public class RuleConditionViewModel : ObservableObject
     public PatternMatchType PatternMatchType
     {
         get => _patternMatchType;
-        set => SetField(ref _patternMatchType, value);
+        set
+        {
+            if (!SetField(ref _patternMatchType, value)) return;
+            OnPropertyChanged(nameof(PatternHint));
+        }
     }
 
     public FileCategory SelectedCategory
@@ -79,12 +84,37 @@ public class RuleConditionViewModel : ObservableObject
     public bool IsFileCategory    => Type == ConditionType.FileCategory;
     public bool IsDateRange       => Type is ConditionType.CreatedDateRange or ConditionType.ModifiedDateRange;
 
+    // ── Hint text (for UX descriptions) ──────────────────────────
+
+    public string TypeHint => Type switch
+    {
+        ConditionType.FileNamePattern   => "파일 이름 전체(확장자 포함)를 검사합니다.",
+        ConditionType.Extension         => "확장자로 분류합니다. 쉼표(,)로 여러 개 입력 가능  예: .pdf, .docx",
+        ConditionType.FileCategory      => "파일 종류(대분류)로 분류합니다. 문서·이미지·동영상 등",
+        ConditionType.CreatedDateRange  => "생성일 기준으로 분류합니다. 시작/종료 중 하나만 입력해도 됩니다.",
+        ConditionType.ModifiedDateRange => "수정일 기준으로 분류합니다. 시작/종료 중 하나만 입력해도 됩니다.",
+        _ => string.Empty
+    };
+
+    public string PatternHint => PatternMatchType switch
+    {
+        PatternMatchType.Contains   => "예: 보고서  →  '보고서'가 포함된 파일명 매칭 (보고서_2024.docx, 월별보고서.xlsx 등)",
+        PatternMatchType.StartsWith => "예: 프로젝트  →  '프로젝트'로 시작하는 파일명 매칭 (프로젝트_계획.docx 등)",
+        PatternMatchType.EndsWith   => "예: _최종.docx  →  '_최종.docx'로 끝나는 파일명 매칭",
+        PatternMatchType.Regex      => "예: ^회의.*\\.pptx$  →  정규식으로 파일명 매칭 (회의록.pptx, 회의자료.pptx 등)",
+        _ => string.Empty
+    };
+
     // ── Conversion ────────────────────────────────────────────────
 
     public RuleCondition ToModel() => new()
     {
         Type             = Type,
-        Value            = Value,
+        // FileCategory: always derive from SelectedCategory so the default "Document"
+        // is captured even when the user never changes the ComboBox selection.
+        Value            = Type == ConditionType.FileCategory
+                           ? SelectedCategory.ToString()
+                           : Value,
         PatternMatchType = PatternMatchType
     };
 

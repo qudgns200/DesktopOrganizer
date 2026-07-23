@@ -311,8 +311,11 @@ internal class TestableAutoOrganizeService : AutoOrganizeService
         IconOrderService       orderService)
         : base(reader, exclusion, classifier, rules, settings, watcher, sortService, orderService) { }
 
-    protected override void WritePositions(Dictionary<string, (int X, int Y)> positions)
-        => PositionWrites.Add(new Dictionary<string, (int X, int Y)>(positions, StringComparer.OrdinalIgnoreCase));
+    protected override int WritePositions(Dictionary<string, (int X, int Y)> positions)
+    {
+        PositionWrites.Add(new Dictionary<string, (int X, int Y)>(positions, StringComparer.OrdinalIgnoreCase));
+        return positions.Count;
+    }
 
     public new void SeedContainerIcons(Guid containerId, IEnumerable<IconInfo> icons)
         => base.SeedContainerIcons(containerId, icons);
