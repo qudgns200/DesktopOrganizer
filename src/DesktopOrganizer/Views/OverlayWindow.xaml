@@ -24,6 +24,8 @@
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="새 Container" Click="OnCreateContainerMenuClick"/>
+                <Separator/>
+                <MenuItem Header="Rule 관리..." Click="OnOpenRuleManagerMenuClick"/>
             </ContextMenu>
         </Grid.ContextMenu>
 

@@ -1,0 +1,101 @@
+<Window x:Class="DesktopOrganizer.Views.Dialogs.RuleManagerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rule 관리"
+        Width="580" Height="480"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F5F5">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="+ 새 Rule" Padding="10,4" Margin="0,0,6,0"
+                    Click="OnAddRuleClick"/>
+            <TextBlock Text="우선순위: 위로 드래그 = 높은 우선순위"
+                       VerticalAlignment="Center" FontSize="11" Foreground="#888"/>
+        </StackPanel>
+
+        <!-- Rule 목록 (drag-to-reorder) -->
+        <ListBox x:Name="RuleListBox"
+                 Grid.Row="1"
+                 ItemsSource="{Binding Rules}"
+                 AllowDrop="True"
+                 Background="White"
+                 BorderThickness="1"
+                 BorderBrush="#CCCCCC"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 PreviewMouseLeftButtonDown="OnListPreviewMouseDown"
+                 PreviewMouseMove="OnListPreviewMouseMove"
+                 Drop="OnListDrop"
+                 DragOver="OnListDragOver">
+
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="8,6"/>
+                    <Setter Property="AllowDrop" Value="True"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="30"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 우선순위 번호 -->
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding Priority}" FontWeight="Bold"
+                                   VerticalAlignment="Center" Foreground="#555"/>
+
+                        <!-- Rule 정보 -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0">
+                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock FontSize="11" Foreground="#777">
+                                <Run Text="{Binding ConditionCount, StringFormat='조건 {0}개'}"/>
+                                <Run Text=" → "/>
+                                <Run Text="{Binding TargetContainerName}"/>
+                                <Run Text=" "/>
+                                <Run Text="{Binding StatusText}" Foreground="{Binding StatusColor}"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- 편집 -->
+                        <Button Grid.Column="2" Content="편집" Padding="6,2" Margin="0,0,4,0"
+                                FontSize="11"
+                                Tag="{Binding Id}"
+                                Click="OnEditRuleClick"/>
+
+                        <!-- 삭제 -->
+                        <Button Grid.Column="3" Content="삭제" Padding="6,2" Margin="0,0,4,0"
+                                FontSize="11"
+                                Tag="{Binding Id}"
+                                Click="OnDeleteRuleClick"/>
+
+                        <!-- 드래그 핸들 아이콘 -->
+                        <TextBlock Grid.Column="4" Text="⠿" FontSize="16"
+                                   VerticalAlignment="Center" Foreground="#AAA"
+                                   ToolTip="드래그하여 순서 변경"
+                                   Cursor="SizeNS"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- 닫기 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="닫기" Width="80" Click="OnCloseClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

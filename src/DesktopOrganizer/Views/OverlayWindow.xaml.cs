@@ -100,7 +100,7 @@ public partial class OverlayWindow : Window
         return false;
     }
 
-    // ── Context menu handlers (F-004) ────────────────────────────
+    // ── Context menu handlers (F-004, F-012~F-015) ──────────────
 
     private void OnPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -111,5 +111,11 @@ public partial class OverlayWindow : Window
     {
         if (DataContext is MainViewModel vm)
             vm.CreateContainerAt(_lastRightClickPosition.X, _lastRightClickPosition.Y);
+    }
+
+    private void OnOpenRuleManagerMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.OpenRuleManager(this);
     }
 }

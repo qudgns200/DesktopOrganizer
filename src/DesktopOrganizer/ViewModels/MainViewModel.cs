@@ -3,6 +3,7 @@ using System.Windows;
 using DesktopOrganizer.Models;
 using DesktopOrganizer.Services;
 using DesktopOrganizer.ViewModels.Base;
+using DesktopOrganizer.Views.Dialogs;
 // UseWindowsForms=true: resolve MessageBox ambiguity
 using MessageBox = System.Windows.MessageBox;
 
@@ -11,11 +12,17 @@ namespace DesktopOrganizer.ViewModels;
 public class MainViewModel : ObservableObject
 {
     private readonly ContainerService _containerService;
+    private readonly RuleService      _ruleService;
+    private readonly SettingsService  _settings;
     private bool _watcherEnabled = true;
 
-    public MainViewModel(ContainerService containerService)
+    public MainViewModel(ContainerService containerService,
+                         RuleService      ruleService,
+                         SettingsService  settings)
     {
         _containerService = containerService;
+        _ruleService      = ruleService;
+        _settings         = settings;
         LoadContainers();
     }
 
@@ -51,6 +58,15 @@ public class MainViewModel : ObservableObject
         var vm = new ContainerViewModel(model, _containerService);
         vm.DeleteRequested += OnDeleteRequested;
         return vm;
+    }
+
+    // ── F-012 ~ F-015: Rule manager ──────────────────────────────
+
+    /// <summary>Opens the Rule management dialog (F-012~F-015).</summary>
+    public void OpenRuleManager(Window owner)
+    {
+        var dialog = new RuleManagerDialog(_ruleService, _settings) { Owner = owner };
+        dialog.ShowDialog();
     }
 
     // ── F-006 ────────────────────────────────────────────────────

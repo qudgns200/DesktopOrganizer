@@ -36,7 +36,8 @@ public partial class App : Application
         _settingsService.Load();
 
         var containerService = new ContainerService(_settingsService);
-        var mainVm           = new MainViewModel(containerService);
+        var ruleService      = new RuleService(_settingsService);
+        var mainVm           = new MainViewModel(containerService, ruleService, _settingsService);
 
         InitializeTrayIcon();
 
