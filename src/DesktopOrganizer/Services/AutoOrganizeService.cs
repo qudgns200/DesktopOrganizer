@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using DesktopOrganizer.Interop;
 using DesktopOrganizer.Models;
@@ -94,7 +93,7 @@ public class AutoOrganizeService : IDisposable
         _watcher.DesktopChanged += OnDesktopChanged;
         _watcher.Start();
 
-        Debug.WriteLine($"[F-017] Initialized: {allIcons.Count} icons, {_containerIcons.Count} containers");
+        LogService.Instance.Info("F-017", $"Initialized: {allIcons.Count} icons, {_containerIcons.Count} containers");
     }
 
     public void Dispose()
@@ -125,7 +124,7 @@ public class AutoOrganizeService : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[F-017] Error handling {e.ChangeType} '{e.FullPath}': {ex.Message}");
+            LogService.Instance.Error("F-017", $"Error handling {e.ChangeType} '{e.FullPath}': {ex.Message}");
         }
     }
 
@@ -143,14 +142,14 @@ public class AutoOrganizeService : IDisposable
 
         if (icon is null)
         {
-            Debug.WriteLine($"[F-017] Created: could not read '{fullPath}' after 3 attempts");
+            LogService.Instance.Warn("F-017", $"Created: could not read '{fullPath}' after 3 attempts");
             return;
         }
 
         icon.IsSystemIcon = _exclusion.IsExcluded(icon);
         if (icon.IsSystemIcon)
         {
-            Debug.WriteLine($"[F-017] Created: '{icon.FileName}' is a system icon — skipped");
+            LogService.Instance.Debug("F-017", $"Created: '{icon.FileName}' is a system icon — skipped");
             return;
         }
 
@@ -159,7 +158,7 @@ public class AutoOrganizeService : IDisposable
         var rule = _rules.FindMatchingRule(icon);
         if (rule is null)
         {
-            Debug.WriteLine($"[F-017] Created: '{icon.FileName}' — no matching rule, position unchanged");
+            LogService.Instance.Debug("F-017", $"Created: '{icon.FileName}' — no matching rule, position unchanged");
             lock (_lock) _icons[fullPath] = icon;
             return;
         }
@@ -167,7 +166,7 @@ public class AutoOrganizeService : IDisposable
         var container = _settings.Config.Containers.FirstOrDefault(c => c.Id == rule.TargetContainerId);
         if (container is null)
         {
-            Debug.WriteLine($"[F-017] Created: rule '{rule.Name}' target container not found — skipped");
+            LogService.Instance.Warn("F-017", $"Created: rule '{rule.Name}' target container not found — skipped");
             lock (_lock) _icons[fullPath] = icon;
             return;
         }
@@ -188,11 +187,11 @@ public class AutoOrganizeService : IDisposable
                 _containerIcons.TryGetValue(icon.AssignedContainerId.Value, out var list))
             {
                 list.Remove(icon);
-                Debug.WriteLine($"[F-017] Deleted: '{icon.FileName}' removed from container {icon.AssignedContainerId}");
+                LogService.Instance.Info("F-017", $"Deleted: '{icon.FileName}' removed from container {icon.AssignedContainerId}");
             }
             else
             {
-                Debug.WriteLine($"[F-017] Deleted: '{icon.FileName}' removed from registry");
+                LogService.Instance.Debug("F-017", $"Deleted: '{icon.FileName}' removed from registry");
             }
         }
     }
@@ -227,7 +226,7 @@ public class AutoOrganizeService : IDisposable
         var rule = _rules.FindMatchingRule(GetIcon(newFullPath));
         if (rule is null)
         {
-            Debug.WriteLine($"[F-017] Renamed: '{Path.GetFileName(newFullPath)}' — no matching rule");
+            LogService.Instance.Debug("F-017", $"Renamed: '{Path.GetFileName(newFullPath)}' — no matching rule");
             return;
         }
 
@@ -292,7 +291,7 @@ public class AutoOrganizeService : IDisposable
 
         _orderService.SaveIconOrder(container.Id, sorted);
 
-        Debug.WriteLine($"[F-017] '{icon.FileName}' → container '{container.Name}' (rule matched)");
+        LogService.Instance.Info("F-017", $"'{icon.FileName}' → container '{container.Name}' (rule matched)");
     }
 
     /// <summary>

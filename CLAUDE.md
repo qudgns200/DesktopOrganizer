@@ -12,8 +12,8 @@
 | 프로젝트명 | Desktop Organizer |
 | 목적 | Windows 바탕화면 아이콘을 Container와 Rule로 자동 관리하는 생산성 프로그램 |
 | 핵심 명세 문서 | `docs/03_FunctionSpec.md` (모든 기능의 단일 진실 공급원) |
-| 현재 Phase | **Phase 8** (Phase 7 완료) |
-| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리), Phase 7 (실시간 바탕화면 감시·새 파일 자동 정리) |
+| 현재 Phase | **MVP 완료** (Phase 9 완료) |
+| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리), Phase 7 (실시간 바탕화면 감시·새 파일 자동 정리), Phase 8 (설정 저장·불러오기 백업 로테이션, Layout 저장·복원), Phase 9 (LogService 날짜별 파일·10MB 롤링·30일 자동 삭제, 트레이 메뉴 로그 열기) |
 
 ---
 
@@ -167,11 +167,11 @@ DesktopOrganizer/
 | F-015 | Rule 우선순위 관리 | Must Have | ✅ 완료 |
 | F-016 | 실시간 바탕화면 감시 | Must Have | ✅ 완료 |
 | F-017 | 새 파일 자동 정리 | Must Have | ✅ 완료 |
-| F-018 | 설정 저장 | Must Have | ⬜ 미완료 |
-| F-019 | 설정 불러오기 | Must Have | ⬜ 미완료 |
-| F-020 | Layout 저장 | Should Have | ⬜ 미완료 |
-| F-021 | Layout 복원 | Should Have | ⬜ 미완료 |
-| F-022 | 로그 기능 | Should Have | ⬜ 미완료 |
+| F-018 | 설정 저장 | Must Have | ✅ 완료 |
+| F-019 | 설정 불러오기 | Must Have | ✅ 완료 |
+| F-020 | Layout 저장 | Should Have | ✅ 완료 |
+| F-021 | Layout 복원 | Should Have | ✅ 완료 |
+| F-022 | 로그 기능 | Should Have | ✅ 완료 |
 
 > 상태 표기: ⬜ 미완료 / 🔄 진행 중 / ✅ 완료
 
@@ -197,4 +197,4 @@ DesktopOrganizer/
 ---
 
 *이 파일은 프로젝트가 진행되면서 지속적으로 업데이트된다.*
-*마지막 업데이트: 2026-07-23 — Phase 7 완료 (FileSystemWatcher 500ms 디바운싱 + 폴링 폴백, AutoOrganizeService Rule 매칭·Container 배치, 180개 테스트 통과), Phase 8 시작 예정*
+*마지막 업데이트: 2026-07-23 — Phase 9 완료 (LogService 날짜별 파일·10MB 롤링·30일 자동삭제·MinLevel 필터링, AppLogLevelExtensions, 트레이 메뉴 로그 파일 열기, 218개 테스트 통과) — MVP F-001~F-022 전체 완료*

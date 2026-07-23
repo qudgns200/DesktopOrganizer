@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
 using DesktopOrganizer.Interop;
 using DesktopOrganizer.Models;
@@ -53,7 +52,7 @@ public sealed class DesktopWatcherService : IDisposable
 
         if (!anyWatcherStarted)
         {
-            Debug.WriteLine("[F-016] FileSystemWatcher failed for all paths — starting polling fallback");
+            LogService.Instance.Warn("F-016", "FileSystemWatcher failed for all paths — starting polling fallback");
             StartPolling();
         }
     }
@@ -124,19 +123,19 @@ public sealed class DesktopWatcherService : IDisposable
 
             w.EnableRaisingEvents = true;
             _watchers.Add(w);
-            Debug.WriteLine($"[F-016] Watching: {path}");
+            LogService.Instance.Info("F-016", $"Watching: {path}");
             return true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[F-016] Failed to watch '{path}': {ex.Message}");
+            LogService.Instance.Error("F-016", $"Failed to watch '{path}': {ex.Message}");
             return false;
         }
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
-        Debug.WriteLine($"[F-016] Watcher error: {e.GetException().Message} — switching to polling");
+        LogService.Instance.Warn("F-016", $"Watcher error: {e.GetException().Message} — switching to polling");
 
         // Disable the broken watcher
         if (sender is FileSystemWatcher w)
@@ -183,7 +182,7 @@ public sealed class DesktopWatcherService : IDisposable
         try { DesktopChanged?.Invoke(this, e); }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[F-016] DesktopChanged handler threw: {ex.Message}");
+            LogService.Instance.Error("F-016", $"DesktopChanged handler threw: {ex.Message}");
         }
     }
 
@@ -194,7 +193,7 @@ public sealed class DesktopWatcherService : IDisposable
         if (_pollTimer is not null) return;  // already polling
         _pollSnapshot = TakeSnapshot();
         _pollTimer = new System.Threading.Timer(OnPollTick, null, PollIntervalMs, PollIntervalMs);
-        Debug.WriteLine("[F-016] Polling started (5s interval)");
+        LogService.Instance.Info("F-016", "Polling started (5s interval)");
     }
 
     private void OnPollTick(object? _)
@@ -223,7 +222,7 @@ public sealed class DesktopWatcherService : IDisposable
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[F-016] Snapshot error for '{root}': {ex.Message}");
+                LogService.Instance.Error("F-016", $"Snapshot error for '{root}': {ex.Message}");
             }
         }
         return result;
