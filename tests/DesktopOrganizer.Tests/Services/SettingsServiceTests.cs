@@ -144,4 +144,94 @@ public class SettingsServiceTests : IDisposable
 
         Assert.Equal("1.0.0", sut2.Config.Version);
     }
+
+    // ── F-018: Backup rotation ───────────────────────────────────
+
+    [Fact]
+    public void Save_SecondSave_CreatesBak1()
+    {
+        var sut = MakeSut();
+        sut.Save(); // creates config.json
+        sut.Save(); // rotates: bak1 ← config.json
+
+        Assert.True(File.Exists(Path.Combine(_tempDir, "config.json.bak1")));
+    }
+
+    [Fact]
+    public void Save_ThirdSave_CreatesBak2()
+    {
+        var sut = MakeSut();
+        sut.Save();
+        sut.Save();
+        sut.Save(); // bak2 ← bak1
+
+        Assert.True(File.Exists(Path.Combine(_tempDir, "config.json.bak2")));
+    }
+
+    [Fact]
+    public void Save_FourSaves_NoBak4Created()
+    {
+        var sut = MakeSut();
+        sut.Save();
+        sut.Save();
+        sut.Save();
+        sut.Save(); // bak3 dropped, no bak4
+
+        Assert.False(File.Exists(Path.Combine(_tempDir, "config.json.bak4")));
+        Assert.True(File.Exists(Path.Combine(_tempDir, "config.json.bak3")));
+    }
+
+    // ── F-019: Backup restore ────────────────────────────────────
+
+    [Fact]
+    public void Load_CorruptMainFile_LoadsFromBak1()
+    {
+        var sut = MakeSut();
+        sut.Config.Containers.Add(new Container { Name = "Bak1Data" });
+        sut.Save(); // config.json with Bak1Data
+        sut.Save(); // bak1 ← Bak1Data config
+
+        File.WriteAllText(Path.Combine(_tempDir, "config.json"), "CORRUPT");
+
+        var sut2 = MakeSut();
+        sut2.Load();
+
+        Assert.Single(sut2.Config.Containers);
+        Assert.Equal("Bak1Data", sut2.Config.Containers[0].Name);
+    }
+
+    [Fact]
+    public void Load_CorruptMainAndBak1_LoadsFromBak2()
+    {
+        var sut = MakeSut();
+        sut.Config.Containers.Add(new Container { Name = "Bak2Data" });
+        sut.Save(); // config.json with Bak2Data
+        sut.Save(); // bak1 ← Bak2Data
+        sut.Save(); // bak2 ← Bak2Data
+
+        File.WriteAllText(Path.Combine(_tempDir, "config.json"),        "CORRUPT");
+        File.WriteAllText(Path.Combine(_tempDir, "config.json.bak1"),   "CORRUPT");
+
+        var sut2 = MakeSut();
+        sut2.Load();
+
+        Assert.Single(sut2.Config.Containers);
+        Assert.Equal("Bak2Data", sut2.Config.Containers[0].Name);
+    }
+
+    [Fact]
+    public void Load_AllBackupsCorrupt_ReturnsDefaultConfig()
+    {
+        Directory.CreateDirectory(_tempDir);
+        File.WriteAllText(Path.Combine(_tempDir, "config.json"),        "CORRUPT");
+        File.WriteAllText(Path.Combine(_tempDir, "config.json.bak1"),   "CORRUPT");
+        File.WriteAllText(Path.Combine(_tempDir, "config.json.bak2"),   "CORRUPT");
+        File.WriteAllText(Path.Combine(_tempDir, "config.json.bak3"),   "CORRUPT");
+
+        var sut = MakeSut();
+        sut.Load();
+
+        Assert.NotNull(sut.Config);
+        Assert.Empty(sut.Config.Containers);
+    }
 }

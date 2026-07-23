@@ -14,6 +14,7 @@ public class MainViewModel : ObservableObject
     private readonly ContainerService _containerService;
     private readonly RuleService      _ruleService;
     private readonly SettingsService  _settings;
+    private LayoutService?            _layoutService;
     private bool _watcherEnabled = true;
 
     public MainViewModel(ContainerService containerService,
@@ -25,6 +26,10 @@ public class MainViewModel : ObservableObject
         _settings         = settings;
         LoadContainers();
     }
+
+    /// <summary>Injected after construction to avoid circular dependency.</summary>
+    public void SetLayoutService(LayoutService layoutService)
+        => _layoutService = layoutService;
 
     public ObservableCollection<ContainerViewModel> Containers { get; } = new();
 
@@ -67,6 +72,73 @@ public class MainViewModel : ObservableObject
     {
         var dialog = new RuleManagerDialog(_ruleService, _settings) { Owner = owner };
         dialog.ShowDialog();
+    }
+
+    // ── F-020: Save layout ───────────────────────────────────────
+
+    public void SaveLayout(Window owner)
+    {
+        if (_layoutService is null) return;
+
+        var nameDialog = new LayoutNameDialog { Owner = owner };
+        if (nameDialog.ShowDialog() != true || nameDialog.ResultName is null) return;
+
+        var name = nameDialog.ResultName;
+
+        // Check for duplicate name
+        if (_layoutService.GetAll().Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var overwrite = MessageBox.Show(
+                $"'{name}' 이름의 Layout이 이미 존재합니다. 덮어쓰시겠습니까?",
+                "이름 중복",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (overwrite != MessageBoxResult.Yes) return;
+
+            var existing = _layoutService.GetAll()
+                .FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null) _layoutService.Delete(existing.Id);
+        }
+
+        var layout = _layoutService.Capture(name, _settings);
+        _layoutService.Save(layout);
+
+        MessageBox.Show($"Layout '{name}'이(가) 저장됐습니다.", "저장 완료",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    // ── F-021: Open layout manager ───────────────────────────────
+
+    public void OpenLayoutManager(Window owner)
+    {
+        if (_layoutService is null) return;
+        var dialog = new LayoutManagerDialog(_layoutService, this) { Owner = owner };
+        dialog.ShowDialog();
+    }
+
+    /// <summary>
+    /// Restores containers from <paramref name="layout"/> and rebuilds the overlay.
+    /// Auto-saves current state as "_auto_before_restore" before applying.
+    /// Returns list of missing icon paths.
+    /// </summary>
+    public IReadOnlyList<string> RestoreLayout(Layout layout)
+    {
+        if (_layoutService is null) return Array.Empty<string>();
+
+        // Auto-save current state
+        var autoSave = _layoutService.Capture("_auto_before_restore", _settings);
+        _layoutService.Save(autoSave);
+
+        // Restore to settings
+        var missing = _layoutService.Restore(layout, _settings,
+            currentDesktopIcons: Array.Empty<IconInfo>());
+
+        // Rebuild the ViewModel collection from the updated settings
+        foreach (var vm in Containers) vm.DeleteRequested -= OnDeleteRequested;
+        Containers.Clear();
+        LoadContainers();
+
+        return missing;
     }
 
     // ── F-006 ────────────────────────────────────────────────────

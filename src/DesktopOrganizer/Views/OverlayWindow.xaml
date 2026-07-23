@@ -26,6 +26,9 @@
                 <MenuItem Header="새 Container" Click="OnCreateContainerMenuClick"/>
                 <Separator/>
                 <MenuItem Header="Rule 관리..." Click="OnOpenRuleManagerMenuClick"/>
+                <Separator/>
+                <MenuItem Header="Layout 저장..." Click="OnSaveLayoutMenuClick"/>
+                <MenuItem Header="Layout 관리..." Click="OnOpenLayoutManagerMenuClick"/>
             </ContextMenu>
         </Grid.ContextMenu>
 

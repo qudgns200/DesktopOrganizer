@@ -118,4 +118,16 @@ public partial class OverlayWindow : Window
         if (DataContext is MainViewModel vm)
             vm.OpenRuleManager(this);
     }
+
+    private void OnSaveLayoutMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.SaveLayout(this);
+    }
+
+    private void OnOpenLayoutManagerMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.OpenLayoutManager(this);
+    }
 }
