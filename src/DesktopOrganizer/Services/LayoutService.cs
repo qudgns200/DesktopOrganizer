@@ -211,15 +211,19 @@ public class LayoutService
                     ? Path.GetFileNameWithoutExtension(icon.FileName)
                     : icon.FileName;
 
-                // Grid position is recomputed from index after container is added;
-                // for simplicity we record the scaled absolute position
+                // Grid position is recomputed from index after container is added.
+                // Apply the same effective cell pitch (base + configured spacing) as
+                // IconSortService so restore matches the live auto-organize layout.
+                int spacing = settings.Config.Settings.IconSpacingPx;
+                int cellW   = IconSortService.IconCellWidth  + spacing;
+                int cellH   = IconSortService.IconCellHeight + spacing;
+                int perRow  = Math.Max(1, (int)((c.Width - IconSortService.PaddingX * 2) / cellW));
+
                 int iconX = (int)(c.X + IconSortService.PaddingX +
-                    (placement.OrderIndex % Math.Max(1, (int)((c.Width - IconSortService.PaddingX * 2) / IconSortService.IconCellWidth)))
-                    * IconSortService.IconCellWidth);
+                    (placement.OrderIndex % perRow) * cellW);
                 int iconY = (int)(c.Y + IconSortService.PaddingY +
                     (c.Style.ShowTitle ? IconSortService.TitleBarHeight : 0) +
-                    (placement.OrderIndex / Math.Max(1, (int)((c.Width - IconSortService.PaddingX * 2) / IconSortService.IconCellWidth)))
-                    * IconSortService.IconCellHeight);
+                    (placement.OrderIndex / perRow) * cellH);
 
                 positionMap[displayName] = (iconX, iconY);
             }

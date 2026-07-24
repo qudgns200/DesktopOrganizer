@@ -60,7 +60,7 @@ public partial class App : Application
             ruleService,
             _settingsService,
             _watcherService,
-            new IconSortService(),
+            new IconSortService(_settingsService),
             new IconOrderService(_settingsService));
         _autoOrganize.Initialize();
         _mainVm.SetAutoOrganize(_autoOrganize);

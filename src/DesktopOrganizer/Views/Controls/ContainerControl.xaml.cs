@@ -90,6 +90,20 @@ public partial class ContainerControl : UserControl
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Double-clicking the container body opens the icon under the cursor.
+    /// The click point is taken relative to this control (0,0 = container top-left),
+    /// matching the grid layout used by IconSortService.
+    /// </summary>
+    private void OnBodyMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2 || _vm is null) return;
+
+        var p = e.GetPosition(this);
+        _vm.RequestLaunchIcon(p.X, p.Y);
+        e.Handled = true;
+    }
+
     private void OnTitleBarMouseMove(object sender, MouseEventArgs e)
     {
         if (!_isDragging || _vm == null) return;

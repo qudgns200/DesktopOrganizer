@@ -84,6 +84,15 @@ public class AutoOrganizeServiceTests : IDisposable
         ConditionLogic.And,
         _container.Id);
 
+    private Rule CreateCategoryRule(FileCategory category) => _ruleService.Create(
+        $"{category} Rule",
+        new List<RuleCondition>
+        {
+            new() { Type = ConditionType.FileCategory, Value = category.ToString() }
+        },
+        ConditionLogic.And,
+        _container.Id);
+
     private DesktopChangeEventArgs CreatedEvent(string fullPath) => new()
     {
         ChangeType = DesktopChangeType.Created,
@@ -145,6 +154,48 @@ public class AutoOrganizeServiceTests : IDisposable
         var icons = _sut.Icons;
         Assert.True(icons.ContainsKey(path));
         Assert.Equal(_container.Id, icons[path].AssignedContainerId);
+    }
+
+    // ── F-017: Created — FileCategory rule (Folder / Executable) ─
+
+    [Fact]
+    public void Created_FolderMatchingCategoryRule_PlacesInContainer()
+    {
+        CreateCategoryRule(FileCategory.Folder);
+        // A real directory on the desktop is read as IconType.Folder → FileCategory.Folder
+        var dirPath = Path.Combine(_tempDir, "MyFolder");
+        Directory.CreateDirectory(dirPath);
+
+        _sut.ProcessChangeEvent(CreatedEvent(dirPath));
+
+        var containerIcons = _sut.GetContainerIcons(_container.Id);
+        Assert.Contains(containerIcons, i => i.FullPath.Equals(dirPath, StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(_sut.PositionWrites);
+    }
+
+    [Fact]
+    public void Created_ExeMatchingCategoryRule_PlacesInContainer()
+    {
+        CreateCategoryRule(FileCategory.Executable);
+        var exePath = CreateTempFile("tool.exe");
+
+        _sut.ProcessChangeEvent(CreatedEvent(exePath));
+
+        var containerIcons = _sut.GetContainerIcons(_container.Id);
+        Assert.Contains(containerIcons, i => i.FullPath.Equals(exePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Created_FolderCategoryRule_PositionKeyIsFolderName()
+    {
+        CreateCategoryRule(FileCategory.Folder);
+        var dirPath = Path.Combine(_tempDir, "보고서폴더");
+        Directory.CreateDirectory(dirPath);
+
+        _sut.ProcessChangeEvent(CreatedEvent(dirPath));
+
+        // The Win32 position key for a folder must be its exact name (no extension logic)
+        Assert.Contains(_sut.PositionWrites, dict => dict.ContainsKey("보고서폴더"));
     }
 
     // ── F-017: Created — no matching rule ────────────────────────
@@ -265,6 +316,59 @@ public class AutoOrganizeServiceTests : IDisposable
         Assert.Contains(containerIcons, i => i.FullPath.Equals(newPath, StringComparison.OrdinalIgnoreCase));
     }
 
+    // ── Double-click launch ──────────────────────────────────────
+
+    [Fact]
+    public void LaunchIconInContainer_FirstCell_LaunchesFirstSortedIcon()
+    {
+        // Default container: 220×160, NameAsc, ShowTitle=true.
+        // Test SUT uses IconSortService() with spacing 0 → cell 75×90, top offset 36.
+        var a = MakeIcon(CreateTempFile("A.txt"));
+        var b = MakeIcon(CreateTempFile("B.txt"));
+        _sut.SeedContainerIcons(_container.Id, new[] { b, a }); // unsorted on purpose
+
+        _sut.LaunchIconInContainer(_container.Id, localX: 40, localY: 60);
+
+        Assert.Single(_sut.LaunchedPaths);
+        Assert.EndsWith("A.txt", _sut.LaunchedPaths[0]); // NameAsc → A is index 0
+    }
+
+    [Fact]
+    public void LaunchIconInContainer_SecondColumn_LaunchesSecondIcon()
+    {
+        var a = MakeIcon(CreateTempFile("A.txt"));
+        var b = MakeIcon(CreateTempFile("B.txt"));
+        _sut.SeedContainerIcons(_container.Id, new[] { a, b });
+
+        // col 1 (localX in [85,160)), row 0 → index 1 → B
+        _sut.LaunchIconInContainer(_container.Id, localX: 120, localY: 60);
+
+        Assert.Single(_sut.LaunchedPaths);
+        Assert.EndsWith("B.txt", _sut.LaunchedPaths[0]);
+    }
+
+    [Fact]
+    public void LaunchIconInContainer_AboveGrid_LaunchesNothing()
+    {
+        _sut.SeedContainerIcons(_container.Id, new[] { MakeIcon(CreateTempFile("A.txt")) });
+
+        // localY 20 is inside the title-bar band (top offset = 36) → no icon
+        _sut.LaunchIconInContainer(_container.Id, localX: 40, localY: 20);
+
+        Assert.Empty(_sut.LaunchedPaths);
+    }
+
+    [Fact]
+    public void LaunchIconInContainer_EmptyCell_LaunchesNothing()
+    {
+        _sut.SeedContainerIcons(_container.Id, new[] { MakeIcon(CreateTempFile("A.txt")) });
+
+        // Only 1 icon (index 0); clicking the second column (index 1) hits an empty cell
+        _sut.LaunchIconInContainer(_container.Id, localX: 120, localY: 60);
+
+        Assert.Empty(_sut.LaunchedPaths);
+    }
+
     // ── First-Match: only first rule applied ─────────────────────
 
     [Fact]
@@ -311,11 +415,15 @@ internal class TestableAutoOrganizeService : AutoOrganizeService
         IconOrderService       orderService)
         : base(reader, exclusion, classifier, rules, settings, watcher, sortService, orderService) { }
 
+    public List<string> LaunchedPaths { get; } = new();
+
     protected override int WritePositions(Dictionary<string, (int X, int Y)> positions)
     {
         PositionWrites.Add(new Dictionary<string, (int X, int Y)>(positions, StringComparer.OrdinalIgnoreCase));
         return positions.Count;
     }
+
+    protected override void LaunchFile(string fullPath) => LaunchedPaths.Add(fullPath);
 
     public new void SeedContainerIcons(Guid containerId, IEnumerable<IconInfo> icons)
         => base.SeedContainerIcons(containerId, icons);

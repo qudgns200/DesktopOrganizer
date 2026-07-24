@@ -8,7 +8,6 @@ using DesktopOrganizer.Views.Controls;
 using Microsoft.Win32;
 // UseWindowsForms=true: resolve ambiguities with WinForms types
 using ContainerControl = DesktopOrganizer.Views.Controls.ContainerControl;
-using Cursors           = System.Windows.Input.Cursors;
 using Point             = System.Windows.Point;
 
 namespace DesktopOrganizer.Views;
@@ -88,53 +87,22 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Returns true only when the cursor is over an interactive part of a ContainerControl:
-    /// the title bar (Cursor=SizeAll) or a resize handle (SizeNWSE / SizeNESW / SizeNS / SizeWE).
-    /// The container body is left transparent so desktop icons underneath can be interacted with.
+    /// Returns true when the cursor is anywhere over a ContainerControl, so the whole
+    /// container is interactive: the title bar drags it, resize handles resize it, and
+    /// the body receives double-clicks that launch the icon under the cursor.
+    /// Points outside every container return false and are made HTTRANSPARENT so
+    /// left/right clicks pass through to the desktop.
     /// </summary>
     private bool IsOverContainer(Point logicalPoint)
     {
         var result = VisualTreeHelper.HitTest(this, logicalPoint);
         if (result is null) return false;
 
-        // Walk from the hit element up to the ContainerControl boundary
         var element = result.VisualHit as DependencyObject;
-        bool insideContainer = false;
-
         while (element is not null)
         {
-            if (element is ContainerControl)
-            {
-                insideContainer = true;
-                break;
-            }
+            if (element is ContainerControl) return true;
             element = VisualTreeHelper.GetParent(element);
-        }
-
-        if (!insideContainer) return false;
-
-        // Only capture mouse for interactive parts (title bar / resize handles),
-        // identified by the cursor assigned in ContainerControl.xaml.
-        return IsInteractiveContainerPart(result.VisualHit as DependencyObject);
-    }
-
-    private static bool IsInteractiveContainerPart(DependencyObject? hit)
-    {
-        var el = hit;
-        while (el is not null)
-        {
-            if (el is FrameworkElement fe)
-            {
-                var cursor = fe.Cursor;
-                if (cursor == Cursors.SizeAll   ||   // title bar drag handle
-                    cursor == Cursors.SizeNWSE  ||   // corner resize
-                    cursor == Cursors.SizeNESW  ||
-                    cursor == Cursors.SizeNS    ||   // edge resize
-                    cursor == Cursors.SizeWE)
-                    return true;
-            }
-            if (el is ContainerControl) break;
-            el = VisualTreeHelper.GetParent(el);
         }
         return false;
     }

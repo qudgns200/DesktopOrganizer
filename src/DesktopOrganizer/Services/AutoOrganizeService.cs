@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using DesktopOrganizer.Interop;
 using DesktopOrganizer.Models;
@@ -403,6 +404,44 @@ public class AutoOrganizeService : IDisposable
 
         LogService.Instance.Info("F-007",
             $"RepositionContainerIcons '{container.Name}': {moved}/{snapshot.Count} repositioned");
+    }
+
+    /// <summary>
+    /// Opens the icon located at <paramref name="localX"/>/<paramref name="localY"/>
+    /// (container-local coordinates) with the shell — the double-click "launch" action
+    /// for icons managed inside a container. Only OPENS the file; never moves/copies/deletes it.
+    /// </summary>
+    public void LaunchIconInContainer(Guid containerId, double localX, double localY)
+    {
+        var container = _settings.Config.Containers.FirstOrDefault(c => c.Id == containerId);
+        if (container is null) return;
+
+        List<IconInfo> ordered;
+        lock (_lock)
+        {
+            if (!_containerIcons.TryGetValue(containerId, out var list) || list.Count == 0) return;
+            // Display order must match ComputePositions (sort, then grid layout).
+            ordered = _sortService.Sort(list, container.SortMode).ToList();
+        }
+
+        int? idx = _sortService.HitTestIndex(container, localX, localY, ordered.Count);
+        if (idx is null) return;
+
+        LaunchFile(ordered[idx.Value].FullPath);
+    }
+
+    /// <summary>Opens a file with its default shell handler. Extracted for testability.</summary>
+    protected virtual void LaunchFile(string fullPath)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
+            LogService.Instance.Info("Launch", $"Opened '{Path.GetFileName(fullPath)}'");
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Error("Launch", $"Failed to open '{fullPath}': {ex.Message}");
+        }
     }
 
     /// <summary>

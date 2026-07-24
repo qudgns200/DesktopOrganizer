@@ -65,8 +65,9 @@ public class MainViewModel : ObservableObject
     private ContainerViewModel WrapContainer(Container model)
     {
         var vm = new ContainerViewModel(model, _containerService);
-        vm.DeleteRequested    += OnDeleteRequested;
-        vm.GeometryCommitted  += OnGeometryCommitted;
+        vm.DeleteRequested     += OnDeleteRequested;
+        vm.GeometryCommitted   += OnGeometryCommitted;
+        vm.LaunchIconRequested += OnLaunchIconRequested;
         return vm;
     }
 
@@ -144,8 +145,9 @@ public class MainViewModel : ObservableObject
         // Rebuild the ViewModel collection from the updated settings
         foreach (var vm in Containers)
         {
-            vm.DeleteRequested   -= OnDeleteRequested;
-            vm.GeometryCommitted -= OnGeometryCommitted;
+            vm.DeleteRequested     -= OnDeleteRequested;
+            vm.GeometryCommitted   -= OnGeometryCommitted;
+            vm.LaunchIconRequested -= OnLaunchIconRequested;
         }
         Containers.Clear();
         LoadContainers();
@@ -169,8 +171,9 @@ public class MainViewModel : ObservableObject
 
         _containerService.Delete(vm.Id);
         Containers.Remove(vm);
-        vm.DeleteRequested   -= OnDeleteRequested;
-        vm.GeometryCommitted -= OnGeometryCommitted;
+        vm.DeleteRequested     -= OnDeleteRequested;
+        vm.GeometryCommitted   -= OnGeometryCommitted;
+        vm.LaunchIconRequested -= OnLaunchIconRequested;
     }
 
     // ── F-007: Reposition icons after container move/resize ──────
@@ -179,5 +182,13 @@ public class MainViewModel : ObservableObject
     {
         if (sender is not ContainerViewModel vm) return;
         _autoOrganize?.RepositionContainerIcons(vm.Id);
+    }
+
+    // ── Double-click launch: open the icon under the cursor ──────
+
+    private void OnLaunchIconRequested(object? sender, (double X, double Y) p)
+    {
+        if (sender is not ContainerViewModel vm) return;
+        _autoOrganize?.LaunchIconInContainer(vm.Id, p.X, p.Y);
     }
 }

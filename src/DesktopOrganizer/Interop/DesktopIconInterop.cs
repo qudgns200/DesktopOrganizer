@@ -168,7 +168,7 @@ internal static class DesktopIconInterop
                     string? matchedKey  = null;
                     (int X, int Y) pos  = default;
 
-                    // 1) Exact NFC match
+                    // 1) Exact NFC match (folders and full-name files land here)
                     if (nfcLookup.TryGetValue(name, out var exact))
                     {
                         pos        = exact.Pos;
@@ -176,11 +176,15 @@ internal static class DesktopIconInterop
                     }
                     else
                     {
-                        // 2) Extension-stripped fallback: Windows hides known-type extensions
-                        //    so the ListView shows "report" while our key is "report.pdf".
+                        // 2) Extension-insensitive fallback. Windows may hide known-type
+                        //    extensions in the ListView, so compare both sides with the
+                        //    extension stripped (handles ".exe"/".pdf" hidden or shown).
+                        var nameNoExt = Path.GetFileNameWithoutExtension(name);
                         var fallback = nfcLookup.FirstOrDefault(kvp =>
                             Path.GetFileNameWithoutExtension(kvp.Key)
-                                .Equals(name, StringComparison.OrdinalIgnoreCase));
+                                .Equals(name,      StringComparison.OrdinalIgnoreCase) ||
+                            Path.GetFileNameWithoutExtension(kvp.Key)
+                                .Equals(nameNoExt, StringComparison.OrdinalIgnoreCase));
                         if (fallback.Key is not null)
                         {
                             pos        = fallback.Value.Pos;
@@ -201,18 +205,18 @@ internal static class DesktopIconInterop
                     moved++;
                 }
 
-                // Report unmatched items; also dump the ListView names at Debug level
-                // so the exact strings can be compared against positions keys in the log.
+                // Report unmatched items. When any remain, also dump the exact ListView
+                // names (at Info level so it appears in default logs) so the mismatch
+                // between our keys and the shell's display strings can be diagnosed.
                 var unmatched = positions.Keys.Where(k => !matched.Contains(k)).ToList();
                 if (unmatched.Count > 0)
                 {
-                    LogService.Instance.Debug("Interop",
-                        $"WriteIconPositions: SysListView32 returned {lvNames.Count} names: " +
+                    LogService.Instance.Info("Interop",
+                        $"WriteIconPositions: {unmatched.Count} unmatched key(s): " +
+                        string.Join(", ", unmatched.Select(k => $"'{k}'")));
+                    LogService.Instance.Info("Interop",
+                        $"WriteIconPositions: SysListView32 returned {lvNames.Count} name(s): " +
                         string.Join(", ", lvNames.Select(n => $"'{n}'")));
-                    foreach (var key in unmatched)
-                        LogService.Instance.Warn("Interop",
-                            $"WriteIconPositions: '{key}' not found in desktop ListView " +
-                            "(may be hidden, name-mismatch, or different Unicode form)");
                 }
             }
             finally
@@ -345,7 +349,15 @@ internal static class DesktopIconInterop
 
         var buf = new byte[textByteLen];
         ReadProcessMemory(hProcess, remoteTxt, buf, buf.Length, out _);
-        return Encoding.Unicode.GetString(buf).TrimEnd('\0');
+
+        // The remote text buffer is allocated once and reused for every item.
+        // The shell writes each item's name NUL-terminated, but a shorter name
+        // leaves trailing bytes from a previous (longer) read. We must therefore
+        // truncate at the FIRST NUL — TrimEnd('\0') is insufficient because it
+        // keeps leftover text that sits AFTER an embedded NUL ("name\0garbage").
+        var s   = Encoding.Unicode.GetString(buf);
+        int nul = s.IndexOf('\0');
+        return nul >= 0 ? s[..nul] : s;
     }
 
     private static (int X, int Y) ReadItemPosition(IntPtr hProcess, IntPtr listView, int index, IntPtr remotePt)

@@ -8,9 +8,12 @@ namespace DesktopOrganizer.Services;
 /// </summary>
 public class IconSortService
 {
-    // Grid cell size (pixels at 100% DPI)
+    // Base grid cell size (pixels at 100% DPI). The vertical cell is taller than the
+    // horizontal one because a desktop icon reserves space for its (often two-line) label.
+    // These are deliberately >= the Windows desktop grid pitch so that, when the shell's
+    // "Align icons to grid" option is active, no two icons snap into the same cell.
     public const int IconCellWidth  = 75;
-    public const int IconCellHeight = 75;
+    public const int IconCellHeight = 90;
 
     // Inset from the container edge
     public const int PaddingX = 10;
@@ -18,6 +21,18 @@ public class IconSortService
 
     // Space reserved for the title bar when ShowTitle=true
     public const int TitleBarHeight = 26;
+
+    // Optional: supplies the user-configured icon spacing (F-010). Null in unit tests.
+    private readonly SettingsService? _settings;
+
+    /// <summary>Parameterless ctor — spacing defaults to 0 (used by unit tests).</summary>
+    public IconSortService() { }
+
+    /// <summary>Production ctor — reads <see cref="AppSettings.IconSpacingPx"/> for grid spacing.</summary>
+    public IconSortService(SettingsService settings) => _settings = settings;
+
+    /// <summary>User-configured spacing added to each base cell (F-010 "정렬 간격").</summary>
+    private int Spacing => _settings?.Config.Settings.IconSpacingPx ?? 0;
 
     // ── F-010: Sort ───────────────────────────────────────────────
 
@@ -59,19 +74,23 @@ public class IconSortService
     /// </summary>
     public void ComputePositions(Container container, IList<IconInfo> sortedIcons)
     {
+        // Effective cell pitch = base cell + user-configured spacing.
+        int cellW = IconCellWidth  + Spacing;
+        int cellH = IconCellHeight + Spacing;
+
         double topStart = container.Y + PaddingY
             + (container.Style.ShowTitle ? TitleBarHeight : 0);
 
         double availableWidth = container.Width - PaddingX * 2;
-        int iconsPerRow = Math.Max(1, (int)(availableWidth / IconCellWidth));
+        int iconsPerRow = Math.Max(1, (int)(availableWidth / cellW));
 
         for (int i = 0; i < sortedIcons.Count; i++)
         {
             int col = i % iconsPerRow;
             int row = i / iconsPerRow;
 
-            sortedIcons[i].X                  = (int)(container.X + PaddingX + col * IconCellWidth);
-            sortedIcons[i].Y                  = (int)(topStart              + row * IconCellHeight);
+            sortedIcons[i].X                  = (int)(container.X + PaddingX + col * cellW);
+            sortedIcons[i].Y                  = (int)(topStart              + row * cellH);
             sortedIcons[i].OrderIndex         = i;
             sortedIcons[i].AssignedContainerId = container.Id;
         }
@@ -83,5 +102,36 @@ public class IconSortService
         var sorted = Sort(icons, container.SortMode);
         ComputePositions(container, sorted);
         return sorted;
+    }
+
+    // ── Hit testing (for double-click launch) ─────────────────────
+
+    /// <summary>
+    /// Maps a point in container-local coordinates (0,0 = container top-left) to the
+    /// index of the icon occupying that grid cell, using the same layout as
+    /// <see cref="ComputePositions"/>.  Returns null when the point is outside the
+    /// icon grid or lands on a cell with no icon.
+    /// </summary>
+    public int? HitTestIndex(Container container, double localX, double localY, int iconCount)
+    {
+        if (iconCount <= 0) return null;
+
+        int cellW = IconCellWidth  + Spacing;
+        int cellH = IconCellHeight + Spacing;
+
+        double left = PaddingX;
+        double top  = PaddingY + (container.Style.ShowTitle ? TitleBarHeight : 0);
+
+        if (localX < left || localY < top) return null;
+
+        double availableWidth = container.Width - PaddingX * 2;
+        int iconsPerRow = Math.Max(1, (int)(availableWidth / cellW));
+
+        int col = (int)((localX - left) / cellW);
+        int row = (int)((localY - top)  / cellH);
+        if (col < 0 || col >= iconsPerRow) return null;
+
+        int index = row * iconsPerRow + col;
+        return index >= 0 && index < iconCount ? index : null;
     }
 }

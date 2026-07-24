@@ -103,6 +103,12 @@ public class ContainerViewModel : ObservableObject
     public event EventHandler? EditStyleRequested;
     /// <summary>Raised after position or size is committed to storage (drag-end, resize-end).</summary>
     public event EventHandler? GeometryCommitted;
+    /// <summary>Raised when the user double-clicks the body; carries container-local (X, Y).</summary>
+    public event EventHandler<(double X, double Y)>? LaunchIconRequested;
+
+    /// <summary>Requests launch of the icon at the given container-local coordinates.</summary>
+    public void RequestLaunchIcon(double x, double y)
+        => LaunchIconRequested?.Invoke(this, (x, y));
 
     // ── F-005 Rename ─────────────────────────────────────────────
 

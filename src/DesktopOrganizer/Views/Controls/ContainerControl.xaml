@@ -79,8 +79,9 @@
                     </Grid>
                 </Border>
 
-                <!-- Content area (icons placed here in Phase 5) -->
-                <Border Grid.Row="1" Background="Transparent"/>
+                <!-- Content area — double-click launches the icon under the cursor -->
+                <Border Grid.Row="1" Background="Transparent"
+                        MouseLeftButtonDown="OnBodyMouseLeftButtonDown"/>
 
                 <!-- Resize handles overlay — 8 directions (F-008) -->
                 <Grid Grid.RowSpan="2">
