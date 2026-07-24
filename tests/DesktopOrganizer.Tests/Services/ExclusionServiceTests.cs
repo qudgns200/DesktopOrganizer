@@ -108,4 +108,42 @@ public class ExclusionServiceTests
         var ex = Record.Exception(() => svc.ApplyExclusion(new List<IconInfo>()));
         Assert.Null(ex);
     }
+
+    // ── F-023: UpdateExcludedPaths (live refresh, no restart needed) ─
+
+    [Fact]
+    public void UpdateExcludedPaths_AddsNewExclusion_TakesEffectImmediately()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            var svc  = CreateService(); // no exclusions initially
+            var icon = MakeIcon(Path.GetFileName(tmp), tmp);
+            Assert.False(svc.IsExcluded(icon)); // real file, not excluded yet
+
+            svc.UpdateExcludedPaths(new[] { tmp });
+
+            Assert.True(svc.IsExcluded(icon)); // now excluded, without recreating the service
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void UpdateExcludedPaths_RemovesStaleExclusion()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            var settings = new AppSettings();
+            settings.ExcludedPaths.Add(tmp);
+            var svc  = new ExclusionService(settings);
+            var icon = MakeIcon(Path.GetFileName(tmp), tmp);
+            Assert.True(svc.IsExcluded(icon));
+
+            svc.UpdateExcludedPaths(Array.Empty<string>());
+
+            Assert.False(svc.IsExcluded(icon));
+        }
+        finally { File.Delete(tmp); }
+    }
 }

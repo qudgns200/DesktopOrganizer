@@ -91,8 +91,15 @@ public class AutoOrganizeService : IDisposable
             }
         }
 
+        // F-017 "규칙 우선성": a container's saved IconOrder is a display-order cache,
+        // not a source of truth for membership — re-validate every restored placement
+        // against the CURRENTLY active rules so items whose matching rule was since
+        // deleted/edited/disabled don't stay stuck in a container forever.
+        UnassignNonMatchingIcons(ComputeMatchedContainers(allIcons));
+
         _watcher.DesktopChanged += OnDesktopChanged;
-        _watcher.Start();
+        if (_settings.Config.Settings.WatcherEnabled)
+            _watcher.Start();
 
         LogService.Instance.Info("F-017", $"Initialized: {allIcons.Count} icons, {_containerIcons.Count} containers");
     }
@@ -114,23 +121,30 @@ public class AutoOrganizeService : IDisposable
                 _icons[icon.FullPath] = icon;
         }
 
+        // Single pass over the fresh read determines, per icon, the one container (if
+        // any) it currently matches — the sole source of truth for both (a) placing
+        // newly-matching icons below and (b) unassigning icons that no longer belong
+        // where they're currently tracked (F-017 "규칙 우선성").
+        var matchedContainerByPath = ComputeMatchedContainers(allIcons);
+
+        // Must run BEFORE placement: otherwise a rule that now points an icon at a
+        // DIFFERENT container than before would leave a stale duplicate behind in
+        // its old one, since placement only ever adds/updates, never removes.
+        UnassignNonMatchingIcons(matchedContainerByPath);
+
         // Group matching icons per container (avoids N separate Win32 calls)
         var containerGroups = new Dictionary<Guid, (Container Container, List<IconInfo> NewIcons)>();
         int matched = 0;
 
         foreach (var icon in allIcons)
         {
-            if (icon.IsSystemIcon) continue;
-            var rule = _rules.FindMatchingRule(icon);
-            if (rule is null) continue;
-            var container = _settings.Config.Containers
-                .FirstOrDefault(c => c.Id == rule.TargetContainerId);
-            if (container is null) continue;
+            if (!matchedContainerByPath.TryGetValue(icon.FullPath, out var containerId)) continue;
+            var container = _settings.Config.Containers.First(c => c.Id == containerId);
 
-            if (!containerGroups.TryGetValue(container.Id, out var group))
+            if (!containerGroups.TryGetValue(containerId, out var group))
             {
                 group = (container, new List<IconInfo>());
-                containerGroups[container.Id] = group;
+                containerGroups[containerId] = group;
             }
             group.NewIcons.Add(icon);
             matched++;
@@ -179,11 +193,107 @@ public class AutoOrganizeService : IDisposable
         return totalMoved;
     }
 
+    // ── F-017 "규칙 우선성": container membership resync ───────────
+
+    /// <summary>
+    /// Computes, for every non-system icon in <paramref name="freshIcons"/>, the single
+    /// container (if any) it currently matches under the active Rules (First-Match,
+    /// disabled rules skipped — same semantics as <see cref="RuleService.FindMatchingRule"/>).
+    /// This is the sole source of truth for container membership: used both to place
+    /// newly-matching icons and, in <see cref="UnassignNonMatchingIcons"/>, to unassign
+    /// icons that no longer belong where they're currently tracked.
+    /// Internal (not private) so DesktopOrganizer.Tests can exercise it directly with a
+    /// controlled icon list — <see cref="Initialize"/>/<see cref="ApplyAllRules"/> read the
+    /// real OS desktop via <see cref="DesktopReaderService"/>, which isn't swappable in tests.
+    /// </summary>
+    internal Dictionary<string, Guid> ComputeMatchedContainers(IEnumerable<IconInfo> freshIcons)
+    {
+        var result = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var icon in freshIcons)
+        {
+            if (icon.IsSystemIcon) continue;
+            var rule = _rules.FindMatchingRule(icon);
+            if (rule is null) continue;
+            var container = _settings.Config.Containers.FirstOrDefault(c => c.Id == rule.TargetContainerId);
+            if (container is null) continue;
+            result[icon.FullPath] = container.Id;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Removes any currently-tracked container icon whose path is not mapped to that
+    /// exact container in <paramref name="matchedContainerByPath"/> — i.e. it no longer
+    /// matches any active rule for the container it's sitting in (rule deleted, edited,
+    /// disabled, or the icon itself was renamed/reclassified/deleted). Without this,
+    /// a placement made under since-changed rules would stay in its container forever,
+    /// since both <see cref="Initialize"/> (restores from saved order) and the
+    /// placement loop above (adds/updates only) never revisit it otherwise.
+    /// Only container TRACKING changes — the real file and its current on-screen
+    /// coordinates are left untouched (non-destructive; F-007 spec). Persists the
+    /// updated (possibly empty) order for every container whose list changed, so the
+    /// removal survives restart instead of being silently re-restored from stale data.
+    /// Internal (not private) — see <see cref="ComputeMatchedContainers"/> for why.
+    /// </summary>
+    internal void UnassignNonMatchingIcons(Dictionary<string, Guid> matchedContainerByPath)
+    {
+        var changedContainerIds = new List<Guid>();
+
+        lock (_lock)
+        {
+            foreach (var (containerId, iconList) in _containerIcons)
+            {
+                bool changed = false;
+                for (int i = iconList.Count - 1; i >= 0; i--)
+                {
+                    var icon = iconList[i];
+                    if (matchedContainerByPath.TryGetValue(icon.FullPath, out var targetId) && targetId == containerId)
+                        continue; // still correctly assigned here
+
+                    iconList.RemoveAt(i);
+                    icon.AssignedContainerId = null;
+                    changed = true;
+                }
+                if (changed) changedContainerIds.Add(containerId);
+            }
+        }
+
+        foreach (var containerId in changedContainerIds)
+        {
+            List<IconInfo> remaining;
+            lock (_lock) { remaining = _containerIcons[containerId].ToList(); }
+            _orderService.SaveIconOrder(containerId, remaining);
+        }
+
+        if (changedContainerIds.Count > 0)
+            LogService.Instance.Info("F-017",
+                $"{changedContainerIds.Count} container(s) had icon(s) unassigned — no longer match any active rule");
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _watcher.DesktopChanged -= OnDesktopChanged;
+    }
+
+    /// <summary>
+    /// Re-applies settings that services otherwise only read once at construction
+    /// (F-023): excluded paths, the watcher debounce window, and the watcher
+    /// enabled/disabled state (unified with the tray "감시 일시정지/재개" toggle —
+    /// both read/write the same AppSettings.WatcherEnabled). Call after the Settings
+    /// dialog saves changes, or after the tray toggle, so they take effect without
+    /// an app restart.
+    /// </summary>
+    public void ApplySettingsChanged()
+    {
+        _exclusion.UpdateExcludedPaths(_settings.Config.Settings.ExcludedPaths);
+        _watcher.DebounceMs = _settings.Config.Settings.WatcherDebounceMs;
+
+        if (_settings.Config.Settings.WatcherEnabled)
+            _watcher.Start();
+        else
+            _watcher.Stop();
     }
 
     // ── Event dispatch ────────────────────────────────────────────
@@ -407,27 +517,41 @@ public class AutoOrganizeService : IDisposable
     }
 
     /// <summary>
-    /// Opens the icon located at <paramref name="localX"/>/<paramref name="localY"/>
-    /// (container-local coordinates) with the shell — the double-click "launch" action
-    /// for icons managed inside a container. Only OPENS the file; never moves/copies/deletes it.
+    /// Finds the icon located at <paramref name="localX"/>/<paramref name="localY"/>
+    /// (container-local coordinates) without launching it — lets the caller (UI layer)
+    /// inspect the icon first, e.g. to decide whether F-025's external-link confirmation
+    /// applies, before committing to <see cref="LaunchIcon"/>.
     /// </summary>
-    public void LaunchIconInContainer(Guid containerId, double localX, double localY)
+    public IconInfo? FindIconAt(Guid containerId, double localX, double localY)
     {
         var container = _settings.Config.Containers.FirstOrDefault(c => c.Id == containerId);
-        if (container is null) return;
+        if (container is null) return null;
 
         List<IconInfo> ordered;
         lock (_lock)
         {
-            if (!_containerIcons.TryGetValue(containerId, out var list) || list.Count == 0) return;
+            if (!_containerIcons.TryGetValue(containerId, out var list) || list.Count == 0) return null;
             // Display order must match ComputePositions (sort, then grid layout).
             ordered = _sortService.Sort(list, container.SortMode).ToList();
         }
 
         int? idx = _sortService.HitTestIndex(container, localX, localY, ordered.Count);
-        if (idx is null) return;
+        return idx is null ? null : ordered[idx.Value];
+    }
 
-        LaunchFile(ordered[idx.Value].FullPath);
+    /// <summary>Opens <paramref name="icon"/> with the shell. Only OPENS the file; never moves/copies/deletes it.</summary>
+    public void LaunchIcon(IconInfo icon) => LaunchFile(icon.FullPath);
+
+    /// <summary>
+    /// Finds and immediately opens the icon at the given container-local coordinates —
+    /// the double-click "launch" action for icons managed inside a container, with no
+    /// confirmation gate. UI code that needs to confirm first (F-025) should call
+    /// <see cref="FindIconAt"/> and <see cref="LaunchIcon"/> separately instead.
+    /// </summary>
+    public void LaunchIconInContainer(Guid containerId, double localX, double localY)
+    {
+        var icon = FindIconAt(containerId, localX, localY);
+        if (icon is not null) LaunchIcon(icon);
     }
 
     /// <summary>Opens a file with its default shell handler. Extracted for testability.</summary>

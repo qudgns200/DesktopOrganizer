@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using DesktopOrganizer.Models;
+using DesktopOrganizer.Resources;
 using DesktopOrganizer.Services;
 using DesktopOrganizer.ViewModels.Base;
 using DesktopOrganizer.Views.Dialogs;
@@ -48,6 +49,14 @@ public class MainViewModel : ObservableObject
     /// <summary>Creates a container at the given overlay coordinates and immediately enters rename mode.</summary>
     public void CreateContainerAt(double x, double y)
     {
+        if (!_containerService.CanCreateMore())
+        {
+            MessageBox.Show(
+                string.Format(Strings.Container_LimitMessageFormat, _settings.Config.Settings.MaxContainers),
+                Strings.Container_LimitTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var model = _containerService.Create(x, y);
         var vm    = WrapContainer(model);
         Containers.Add(vm);
@@ -82,6 +91,19 @@ public class MainViewModel : ObservableObject
 
     /// <summary>Applies all active rules and returns the number of repositioned icons.</summary>
     public int ApplyAllRules() => _autoOrganize?.ApplyAllRules() ?? 0;
+
+    // ── F-023: Settings dialog ────────────────────────────────────
+
+    /// <summary>Opens the Settings dialog; on OK, persists and applies changes without requiring a restart.</summary>
+    public void OpenSettingsDialog()
+    {
+        var dialog = new SettingsDialog(_settings.Config.Settings);
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.Save();
+        LogService.Instance.MinLevel = _settings.Config.Settings.LogLevel.ToLogLevel();
+        _autoOrganize?.ApplySettingsChanged();
+    }
 
     // ── F-020: Save layout ───────────────────────────────────────
 
@@ -188,7 +210,23 @@ public class MainViewModel : ObservableObject
 
     private void OnLaunchIconRequested(object? sender, (double X, double Y) p)
     {
-        if (sender is not ContainerViewModel vm) return;
-        _autoOrganize?.LaunchIconInContainer(vm.Id, p.X, p.Y);
+        if (sender is not ContainerViewModel vm || _autoOrganize is null) return;
+
+        var icon = _autoOrganize.FindIconAt(vm.Id, p.X, p.Y);
+        if (icon is null) return;
+
+        // F-025: confirm before opening internet shortcuts, unless the user disabled it
+        bool isExternalLink = icon.Extension.Equals(".url", StringComparison.OrdinalIgnoreCase);
+        if (isExternalLink && _settings.Config.Settings.ConfirmExternalLinkLaunch)
+        {
+            var result = MessageBox.Show(
+                string.Format(Strings.ExternalLink_ConfirmMessageFormat, icon.FileName),
+                Strings.ExternalLink_ConfirmTitle,
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.OK) return;
+        }
+
+        _autoOrganize.LaunchIcon(icon);
     }
 }

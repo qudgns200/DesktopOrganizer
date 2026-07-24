@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
+using DesktopOrganizer.Resources;
 using DesktopOrganizer.Services;
 using DesktopOrganizer.ViewModels;
 // UseWindowsForms=true causes ambiguity: resolve both conflicting types
@@ -18,7 +19,6 @@ public partial class App : Application
     private Mutex? _mutex;
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _pauseMenuItem;
-    private bool _watcherPaused;
     private SettingsService?       _settingsService;
     private LayoutService?         _layoutService;
     private DesktopWatcherService? _watcherService;
@@ -30,7 +30,7 @@ public partial class App : Application
         _mutex = new Mutex(true, MutexName, out bool createdNew);
         if (!createdNew)
         {
-            MessageBox.Show("Desktop Organizer가 이미 실행 중입니다.", "Desktop Organizer",
+            MessageBox.Show(Strings.App_AlreadyRunningMessage, Strings.App_AlreadyRunningTitle,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
@@ -63,6 +63,7 @@ public partial class App : Application
             new IconSortService(_settingsService),
             new IconOrderService(_settingsService));
         _autoOrganize.Initialize();
+        _autoOrganize.ApplySettingsChanged(); // F-023: apply WatcherDebounceMs from config.json at startup
         _mainVm.SetAutoOrganize(_autoOrganize);
 
         InitializeTrayIcon();
@@ -100,46 +101,55 @@ public partial class App : Application
         var menu = new ContextMenuStrip();
 
         // Container / Rule / Layout 관리
-        var newContainerItem = new ToolStripMenuItem("새 Container");
+        var newContainerItem = new ToolStripMenuItem(Strings.Tray_NewContainer);
         newContainerItem.Click += (_, _) => Dispatcher.Invoke(() =>
             _mainVm?.CreateContainerAt(100, 100));
         menu.Items.Add(newContainerItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
-        var ruleItem = new ToolStripMenuItem("Rule 관리...");
+        var ruleItem = new ToolStripMenuItem(Strings.Tray_RuleManager);
         ruleItem.Click += (_, _) => Dispatcher.Invoke(() =>
             _mainVm?.OpenRuleManager());
         menu.Items.Add(ruleItem);
 
-        var saveLayoutItem = new ToolStripMenuItem("Layout 저장...");
+        var saveLayoutItem = new ToolStripMenuItem(Strings.Tray_SaveLayout);
         saveLayoutItem.Click += (_, _) => Dispatcher.Invoke(() =>
             _mainVm?.SaveLayout());
         menu.Items.Add(saveLayoutItem);
 
-        var manageLayoutItem = new ToolStripMenuItem("Layout 관리...");
+        var manageLayoutItem = new ToolStripMenuItem(Strings.Tray_ManageLayout);
         manageLayoutItem.Click += (_, _) => Dispatcher.Invoke(() =>
             _mainVm?.OpenLayoutManager());
         menu.Items.Add(manageLayoutItem);
 
+        var settingsItem = new ToolStripMenuItem(Strings.Tray_Settings);
+        settingsItem.Click += (_, _) => Dispatcher.Invoke(() =>
+        {
+            _mainVm?.OpenSettingsDialog();
+            UpdateWatcherMenuText(); // Settings dialog may have changed WatcherEnabled
+        });
+        menu.Items.Add(settingsItem);
+
         menu.Items.Add(new ToolStripSeparator());
 
-        // 감시 일시정지 / 재개
-        _pauseMenuItem = new ToolStripMenuItem("감시 일시정지");
+        // 감시 일시정지 / 재개 — AppSettings.WatcherEnabled와 통합된 단일 상태 (F-023)
+        _pauseMenuItem = new ToolStripMenuItem();
         _pauseMenuItem.Click += (_, _) => OnToggleWatcherClick();
         menu.Items.Add(_pauseMenuItem);
+        UpdateWatcherMenuText();
 
         menu.Items.Add(new ToolStripSeparator());
 
         // 로그 파일 열기
-        var openLogItem = new ToolStripMenuItem("로그 파일 열기");
+        var openLogItem = new ToolStripMenuItem(Strings.Tray_OpenLog);
         openLogItem.Click += (_, _) => OnOpenLogFileClick();
         menu.Items.Add(openLogItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
         // 종료
-        var exitItem = new ToolStripMenuItem("종료");
+        var exitItem = new ToolStripMenuItem(Strings.Tray_Exit);
         exitItem.Click += (_, _) => Shutdown();
         menu.Items.Add(exitItem);
 
@@ -154,7 +164,7 @@ public partial class App : Application
 
         if (!Directory.Exists(logsDir))
         {
-            MessageBox.Show("아직 기록된 로그 파일이 없습니다.", "Desktop Organizer",
+            MessageBox.Show(Strings.App_NoLogFileMessage, Strings.App_AlreadyRunningTitle,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -169,11 +179,20 @@ public partial class App : Application
 
     private void OnToggleWatcherClick()
     {
-        _watcherPaused = !_watcherPaused;
-        if (_pauseMenuItem is not null)
-            _pauseMenuItem.Text = _watcherPaused ? "감시 재개" : "감시 일시정지";
+        if (_settingsService is null) return;
 
-        if (_watcherPaused) _watcherService?.Stop();
-        else                _watcherService?.Start();
+        var settings = _settingsService.Config.Settings;
+        settings.WatcherEnabled = !settings.WatcherEnabled;
+        _settingsService.Save();
+        _autoOrganize?.ApplySettingsChanged();
+        UpdateWatcherMenuText();
+    }
+
+    /// <summary>Keeps the tray toggle label in sync with AppSettings.WatcherEnabled.</summary>
+    private void UpdateWatcherMenuText()
+    {
+        if (_pauseMenuItem is null) return;
+        bool enabled = _settingsService?.Config.Settings.WatcherEnabled ?? true;
+        _pauseMenuItem.Text = enabled ? Strings.Tray_WatcherPause : Strings.Tray_WatcherResume;
     }
 }

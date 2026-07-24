@@ -17,6 +17,9 @@ public class AppSettings
     public int MaxContainers { get; set; } = 50;
     public AppLogLevel LogLevel { get; set; } = AppLogLevel.Info;
 
+    /// <summary>F-025: Confirm before launching a .url shortcut from inside a container.</summary>
+    public bool ConfirmExternalLinkLaunch { get; set; } = true;
+
     // Paths/names excluded from auto-organize (user-added)
     public List<string> ExcludedPaths { get; set; } = new();
 

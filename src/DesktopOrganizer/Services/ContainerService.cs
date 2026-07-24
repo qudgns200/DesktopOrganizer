@@ -15,6 +15,14 @@ public class ContainerService
     /// <summary>All containers currently in memory (loaded from config).</summary>
     public IReadOnlyList<Container> GetAll() => _settings.Config.Containers;
 
+    /// <summary>
+    /// True if another container can be created without exceeding
+    /// <see cref="AppSettings.MaxContainers"/> (F-023). Callers should check this
+    /// before invoking <see cref="Create"/> from user-facing actions.
+    /// </summary>
+    public bool CanCreateMore() =>
+        _settings.Config.Containers.Count < _settings.Config.Settings.MaxContainers;
+
     // ── F-004 ────────────────────────────────────────────────────
 
     /// <summary>Creates a new container at the given overlay coordinates.</summary>

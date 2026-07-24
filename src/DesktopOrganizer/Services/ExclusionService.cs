@@ -24,7 +24,8 @@ public class ExclusionService
             "제어판", "Control Panel"
         };
 
-    private readonly HashSet<string> _userExcludedPaths;
+    private readonly object _lock = new();
+    private HashSet<string> _userExcludedPaths;
 
     public ExclusionService(AppSettings settings)
     {
@@ -32,10 +33,23 @@ public class ExclusionService
             settings.ExcludedPaths, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Replaces the excluded-paths set with the current values from Settings (F-023).
+    /// Without this, edits made in the Settings dialog would only take effect after
+    /// restart, since the constructor only snapshots <see cref="AppSettings.ExcludedPaths"/> once.
+    /// </summary>
+    public void UpdateExcludedPaths(IEnumerable<string> paths)
+    {
+        var updated = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
+        lock (_lock) { _userExcludedPaths = updated; }
+    }
+
     public bool IsExcluded(IconInfo icon)
     {
         // Layer 1: user explicitly excluded this path
-        if (_userExcludedPaths.Contains(icon.FullPath))
+        bool userExcluded;
+        lock (_lock) { userExcluded = _userExcludedPaths.Contains(icon.FullPath); }
+        if (userExcluded)
             return true;
 
         // Layer 2: virtual items have no corresponding disk entry

@@ -369,6 +369,206 @@ public class AutoOrganizeServiceTests : IDisposable
         Assert.Empty(_sut.LaunchedPaths);
     }
 
+    // ── F-025: FindIconAt / LaunchIcon split (lets the caller confirm first) ─
+
+    [Fact]
+    public void FindIconAt_FirstCell_ReturnsIconWithoutLaunching()
+    {
+        var a = MakeIcon(CreateTempFile("A.txt"));
+        var b = MakeIcon(CreateTempFile("B.txt"));
+        _sut.SeedContainerIcons(_container.Id, new[] { b, a });
+
+        var found = _sut.FindIconAt(_container.Id, localX: 40, localY: 60);
+
+        Assert.NotNull(found);
+        Assert.EndsWith("A.txt", found!.FullPath); // NameAsc → A is index 0
+        Assert.Empty(_sut.LaunchedPaths); // lookup only, nothing launched
+    }
+
+    [Fact]
+    public void FindIconAt_EmptyCell_ReturnsNull()
+    {
+        _sut.SeedContainerIcons(_container.Id, new[] { MakeIcon(CreateTempFile("A.txt")) });
+
+        var found = _sut.FindIconAt(_container.Id, localX: 120, localY: 60);
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public void LaunchIcon_LaunchesTheGivenIcon()
+    {
+        var icon = MakeIcon(CreateTempFile("A.txt"));
+
+        _sut.LaunchIcon(icon);
+
+        Assert.Single(_sut.LaunchedPaths);
+        Assert.Equal(icon.FullPath, _sut.LaunchedPaths[0]);
+    }
+
+    // ── F-017 "규칙 우선성": stale container-membership resync ────
+
+    [Fact]
+    public void ComputeMatchedContainers_ReturnsTargetContainer_ForMatchingIcon()
+    {
+        CreatePdfRule();
+        var path = CreateTempFile("report.pdf");
+        var icon = MakeIcon(path, ".pdf");
+
+        var result = _sut.ComputeMatchedContainers(new[] { icon });
+
+        Assert.True(result.TryGetValue(path, out var containerId));
+        Assert.Equal(_container.Id, containerId);
+    }
+
+    [Fact]
+    public void ComputeMatchedContainers_NoRuleMatches_ExcludesIcon()
+    {
+        // No rules registered at all
+        var path = CreateTempFile("tool.exe");
+        var icon = MakeIcon(path, ".exe", FileCategory.Executable);
+
+        var result = _sut.ComputeMatchedContainers(new[] { icon });
+
+        Assert.False(result.ContainsKey(path));
+    }
+
+    [Fact]
+    public void ComputeMatchedContainers_SystemIcon_Excluded()
+    {
+        CreateCategoryRule(FileCategory.Executable);
+        var path = CreateTempFile("tool.exe");
+        var icon = MakeIcon(path, ".exe", FileCategory.Executable);
+        icon.IsSystemIcon = true;
+
+        var result = _sut.ComputeMatchedContainers(new[] { icon });
+
+        Assert.False(result.ContainsKey(path));
+    }
+
+    [Fact]
+    public void UnassignNonMatchingIcons_RemovesIconNoLongerMatchingItsContainer()
+    {
+        // Simulates the reported bug: an .exe sitting in a container from an earlier
+        // rule that has since been deleted/changed, so it now matches nothing.
+        var exePath = CreateTempFile("뭐하려했더라v2.5.20.exe");
+        var exeIcon = MakeIcon(exePath, ".exe", FileCategory.Executable);
+        exeIcon.AssignedContainerId = _container.Id;
+        _sut.SeedContainerIcons(_container.Id, new[] { exeIcon });
+
+        // Current rules match nothing for this icon (empty dict = "matches no container")
+        _sut.UnassignNonMatchingIcons(new Dictionary<string, Guid>());
+
+        Assert.Empty(_sut.GetContainerIcons(_container.Id));
+    }
+
+    [Fact]
+    public void UnassignNonMatchingIcons_SetsAssignedContainerIdToNull()
+    {
+        var path = CreateTempFile("stale.exe");
+        var icon = MakeIcon(path, ".exe", FileCategory.Executable);
+        icon.AssignedContainerId = _container.Id;
+        _sut.SeedContainerIcons(_container.Id, new[] { icon });
+
+        _sut.UnassignNonMatchingIcons(new Dictionary<string, Guid>());
+
+        Assert.Null(icon.AssignedContainerId);
+    }
+
+    [Fact]
+    public void UnassignNonMatchingIcons_KeepsIconStillMatchingSameContainer()
+    {
+        var path = CreateTempFile("report.pdf");
+        var icon = MakeIcon(path, ".pdf");
+        icon.AssignedContainerId = _container.Id;
+        _sut.SeedContainerIcons(_container.Id, new[] { icon });
+
+        var stillMatches = new Dictionary<string, Guid> { [path] = _container.Id };
+        _sut.UnassignNonMatchingIcons(stillMatches);
+
+        Assert.Single(_sut.GetContainerIcons(_container.Id));
+    }
+
+    [Fact]
+    public void UnassignNonMatchingIcons_IconNowMatchesDifferentContainer_RemovedFromOldOne()
+    {
+        var otherContainer = new Container { Id = Guid.NewGuid(), Name = "Other" };
+        _settings.Config.Containers.Add(otherContainer);
+        _settings.Save();
+
+        var path = CreateTempFile("moved.pdf");
+        var icon = MakeIcon(path, ".pdf");
+        icon.AssignedContainerId = _container.Id;
+        _sut.SeedContainerIcons(_container.Id, new[] { icon });
+
+        // Now matches otherContainer instead of _container
+        var newMapping = new Dictionary<string, Guid> { [path] = otherContainer.Id };
+        _sut.UnassignNonMatchingIcons(newMapping);
+
+        Assert.Empty(_sut.GetContainerIcons(_container.Id));
+    }
+
+    [Fact]
+    public void UnassignNonMatchingIcons_PersistsUpdatedOrder_SoRestartDoesNotResurrectIt()
+    {
+        var path = CreateTempFile("stale.exe");
+        var icon = MakeIcon(path, ".exe", FileCategory.Executable);
+        icon.AssignedContainerId = _container.Id;
+        _sut.SeedContainerIcons(_container.Id, new[] { icon });
+        // Simulate that this placement was previously persisted to disk
+        new IconOrderService(_settings).SaveIconOrder(_container.Id, new[] { icon });
+        Assert.Contains(_container.IconOrder, e => e.IconPath == path);
+
+        _sut.UnassignNonMatchingIcons(new Dictionary<string, Guid>());
+
+        Assert.DoesNotContain(_container.IconOrder, e => e.IconPath == path);
+    }
+
+    // ── F-023: WatcherEnabled unification (tray toggle ⇄ Settings dialog) ─
+
+    [Fact]
+    public void Initialize_WatcherEnabledDefault_StartsWatcher()
+    {
+        _sut.Initialize();
+        Assert.True(_watcher.IsRunning);
+    }
+
+    [Fact]
+    public void Initialize_WatcherDisabled_DoesNotStartWatcher()
+    {
+        _settings.Config.Settings.WatcherEnabled = false;
+        _settings.Save();
+
+        _sut.Initialize();
+
+        Assert.False(_watcher.IsRunning);
+    }
+
+    [Fact]
+    public void ApplySettingsChanged_WatcherDisabled_StopsRunningWatcher()
+    {
+        _sut.Initialize(); // starts running (default WatcherEnabled = true)
+        Assert.True(_watcher.IsRunning);
+
+        _settings.Config.Settings.WatcherEnabled = false;
+        _sut.ApplySettingsChanged();
+
+        Assert.False(_watcher.IsRunning);
+    }
+
+    [Fact]
+    public void ApplySettingsChanged_WatcherReEnabled_RestartsWatcher()
+    {
+        _settings.Config.Settings.WatcherEnabled = false;
+        _sut.Initialize(); // does not start
+        Assert.False(_watcher.IsRunning);
+
+        _settings.Config.Settings.WatcherEnabled = true;
+        _sut.ApplySettingsChanged();
+
+        Assert.True(_watcher.IsRunning);
+    }
+
     // ── First-Match: only first rule applied ─────────────────────
 
     [Fact]

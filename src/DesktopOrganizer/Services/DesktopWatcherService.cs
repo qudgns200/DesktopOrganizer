@@ -12,8 +12,14 @@ namespace DesktopOrganizer.Services;
 /// </summary>
 public sealed class DesktopWatcherService : IDisposable
 {
-    private const int DebounceMs    = 500;
     private const int PollIntervalMs = 5_000;
+
+    /// <summary>
+    /// Debounce window in milliseconds before a batch of file-system events is flushed.
+    /// Configurable via F-023 (Settings dialog, backed by <see cref="AppSettings.WatcherDebounceMs"/>);
+    /// defaults to 500ms to match the original F-016 spec.
+    /// </summary>
+    public int DebounceMs { get; set; } = 500;
 
     private readonly List<string>  _desktopPaths;
     private readonly List<FileSystemWatcher> _watchers = new();
@@ -30,6 +36,9 @@ public sealed class DesktopWatcherService : IDisposable
     private bool _disposed;
 
     public event EventHandler<DesktopChangeEventArgs>? DesktopChanged;
+
+    /// <summary>True if the watcher (FileSystemWatcher or polling fallback) is currently active.</summary>
+    public bool IsRunning => _running;
 
     public DesktopWatcherService()
     {

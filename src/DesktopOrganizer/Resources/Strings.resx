@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- Tray menu (App.xaml.cs) -->
+  <data name="Tray_NewContainer" xml:space="preserve"><value>새 Container</value></data>
+  <data name="Tray_RuleManager" xml:space="preserve"><value>Rule 관리...</value></data>
+  <data name="Tray_SaveLayout" xml:space="preserve"><value>Layout 저장...</value></data>
+  <data name="Tray_ManageLayout" xml:space="preserve"><value>Layout 관리...</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>설정...</value></data>
+  <data name="Tray_WatcherPause" xml:space="preserve"><value>감시 일시정지</value></data>
+  <data name="Tray_WatcherResume" xml:space="preserve"><value>감시 재개</value></data>
+  <data name="Tray_OpenLog" xml:space="preserve"><value>로그 파일 열기</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>종료</value></data>
+  <data name="App_AlreadyRunningMessage" xml:space="preserve"><value>Desktop Organizer가 이미 실행 중입니다.</value></data>
+  <data name="App_AlreadyRunningTitle" xml:space="preserve"><value>Desktop Organizer</value></data>
+  <data name="App_NoLogFileMessage" xml:space="preserve"><value>아직 기록된 로그 파일이 없습니다.</value></data>
+
+  <!-- Common button captions -->
+  <data name="Common_OK" xml:space="preserve"><value>확인</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>취소</value></data>
+
+  <!-- F-023 Settings dialog -->
+  <data name="Settings_Title" xml:space="preserve"><value>설정</value></data>
+  <data name="Settings_WatcherEnabled" xml:space="preserve"><value>바탕화면 실시간 감시 사용</value></data>
+  <data name="Settings_WatcherDebounceMsLabel" xml:space="preserve"><value>감시 디바운싱 (100~5000 ms)</value></data>
+  <data name="Settings_IconSpacingPxLabel" xml:space="preserve"><value>아이콘 정렬 간격 (0~64 px)</value></data>
+  <data name="Settings_MaxContainersLabel" xml:space="preserve"><value>최대 Container 개수 (1~200)</value></data>
+  <data name="Settings_LogLevelLabel" xml:space="preserve"><value>로그 레벨</value></data>
+  <data name="Settings_ExcludedPathsLabel" xml:space="preserve"><value>제외 경로 (자동 정리 대상에서 제외할 파일/폴더)</value></data>
+  <data name="Settings_AddButton" xml:space="preserve"><value>추가</value></data>
+  <data name="Settings_RemoveButton" xml:space="preserve"><value>삭제</value></data>
+  <data name="Settings_ErrorTitle" xml:space="preserve"><value>설정 오류</value></data>
+  <data name="Settings_DebounceRangeError" xml:space="preserve"><value>감시 디바운싱은 100~5000ms 사이여야 합니다.</value></data>
+  <data name="Settings_SpacingRangeError" xml:space="preserve"><value>아이콘 간격은 0~64px 사이여야 합니다.</value></data>
+  <data name="Settings_MaxContainersRangeError" xml:space="preserve"><value>최대 Container 수는 1~200 사이여야 합니다.</value></data>
+  <data name="Settings_PathAddedTitle" xml:space="preserve"><value>제외 경로 추가</value></data>
+  <data name="Settings_PathNotExistMessage" xml:space="preserve"><value>지정한 경로가 현재 존재하지 않습니다. 목록에는 추가되며, 나중에 해당 경로가 생기면 자동으로 적용됩니다.</value></data>
+  <data name="Settings_ConfirmExternalLinkLaunch" xml:space="preserve"><value>외부 링크 실행 전 확인 (.url 바로가기)</value></data>
+
+  <!-- F-023 container-limit message (MainViewModel.CreateContainerAt) -->
+  <data name="Container_LimitTitle" xml:space="preserve"><value>Container 생성 제한</value></data>
+  <data name="Container_LimitMessageFormat" xml:space="preserve"><value>Container는 최대 {0}개까지 생성할 수 있습니다.</value></data>
+
+  <!-- F-025: external link launch confirmation -->
+  <data name="ExternalLink_ConfirmTitle" xml:space="preserve"><value>외부 링크 열기</value></data>
+  <data name="ExternalLink_ConfirmMessageFormat" xml:space="preserve"><value>'{0}'을(를) 열면 외부 웹사이트로 이동합니다. 계속하시겠습니까?</value></data>
+</root>

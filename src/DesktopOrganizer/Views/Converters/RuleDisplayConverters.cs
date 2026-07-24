@@ -41,6 +41,24 @@ public class PatternMatchTypeDisplayConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>Maps AppLogLevel enum values to Korean display names (F-023 Settings dialog).</summary>
+[ValueConversion(typeof(AppLogLevel), typeof(string))]
+public class AppLogLevelDisplayConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is AppLogLevel level ? level switch
+        {
+            AppLogLevel.Disabled  => "비활성화",
+            AppLogLevel.ErrorOnly => "오류만 (WARN+ERROR)",
+            AppLogLevel.Info      => "정보 (기본값)",
+            AppLogLevel.Debug     => "디버그 (상세)",
+            _                    => value.ToString() ?? string.Empty
+        } : value;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 /// <summary>Maps FileCategory enum values to Korean display names.</summary>
 [ValueConversion(typeof(FileCategory), typeof(string))]
 public class FileCategoryDisplayConverter : IValueConverter

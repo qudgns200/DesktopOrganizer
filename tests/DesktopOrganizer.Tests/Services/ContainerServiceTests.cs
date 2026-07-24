@@ -70,6 +70,27 @@ public class ContainerServiceTests : IDisposable
         Assert.True(File.Exists(configPath));
     }
 
+    // ── F-023: CanCreateMore (MaxContainers enforcement) ──────────
+
+    [Fact]
+    public void CanCreateMore_BelowLimit_ReturnsTrue()
+    {
+        _settings.Config.Settings.MaxContainers = 2;
+        _sut.Create(0, 0);
+
+        Assert.True(_sut.CanCreateMore());
+    }
+
+    [Fact]
+    public void CanCreateMore_AtLimit_ReturnsFalse()
+    {
+        _settings.Config.Settings.MaxContainers = 2;
+        _sut.Create(0, 0);
+        _sut.Create(0, 0);
+
+        Assert.False(_sut.CanCreateMore());
+    }
+
     [Fact]
     public void GetAll_ReflectsCreatedContainers()
     {

@@ -1,0 +1,99 @@
+<Window x:Class="DesktopOrganizer.Views.Dialogs.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:DesktopOrganizer.Views.Converters"
+        xmlns:res="clr-namespace:DesktopOrganizer.Resources"
+        Title="{x:Static res:Strings.Settings_Title}"
+        Width="480" Height="560"
+        MinWidth="420" MinHeight="480"
+        WindowStyle="ToolWindow"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <conv:AppLogLevelDisplayConverter x:Key="LogLevelConv"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Watcher enabled -->
+                <CheckBox Content="{x:Static res:Strings.Settings_WatcherEnabled}" IsChecked="{Binding WatcherEnabled}"/>
+
+                <!-- F-025: external link confirmation -->
+                <CheckBox Content="{x:Static res:Strings.Settings_ConfirmExternalLinkLaunch}"
+                          IsChecked="{Binding ConfirmExternalLinkLaunch}" Margin="0,6,0,0"/>
+
+                <!-- Watcher debounce -->
+                <TextBlock Text="{x:Static res:Strings.Settings_WatcherDebounceMsLabel}" Margin="0,12,0,2"/>
+                <TextBox Text="{Binding WatcherDebounceMs, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4,3" HorizontalAlignment="Left" Width="120"/>
+
+                <!-- Icon spacing -->
+                <TextBlock Text="{x:Static res:Strings.Settings_IconSpacingPxLabel}" Margin="0,12,0,2"/>
+                <TextBox Text="{Binding IconSpacingPx, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4,3" HorizontalAlignment="Left" Width="120"/>
+
+                <!-- Max containers -->
+                <TextBlock Text="{x:Static res:Strings.Settings_MaxContainersLabel}" Margin="0,12,0,2"/>
+                <TextBox Text="{Binding MaxContainers, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4,3" HorizontalAlignment="Left" Width="120"/>
+
+                <!-- Log level -->
+                <TextBlock Text="{x:Static res:Strings.Settings_LogLevelLabel}" Margin="0,12,0,2"/>
+                <ComboBox ItemsSource="{Binding LogLevelOptions}"
+                          SelectedItem="{Binding LogLevel}"
+                          Padding="4,3" HorizontalAlignment="Left" Width="180">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource LogLevelConv}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Excluded paths -->
+                <TextBlock Text="{x:Static res:Strings.Settings_ExcludedPathsLabel}" Margin="0,16,0,4"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding NewExcludedPath, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="4,3"/>
+                    <Button Grid.Column="1" Content="{x:Static res:Strings.Settings_AddButton}" Width="60" Margin="6,0,0,0"
+                            Click="OnAddExcludedPathClick"/>
+                </Grid>
+
+                <ListBox ItemsSource="{Binding ExcludedPaths}" Margin="0,6,0,0"
+                         MaxHeight="140" BorderThickness="1" BorderBrush="#CCCCCC">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                <Button Grid.Column="1" Content="{x:Static res:Strings.Settings_RemoveButton}" Width="52" Height="24"
+                                        Tag="{Binding}" Click="OnRemoveExcludedPathClick"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Bottom: OK / Cancel -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="{x:Static res:Strings.Common_Cancel}" Width="80" IsCancel="True" Click="OnCancelClick"/>
+            <Button Content="{x:Static res:Strings.Common_OK}" Width="80" Margin="8,0,0,0" IsDefault="True" Click="OnOkClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

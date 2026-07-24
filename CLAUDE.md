@@ -12,8 +12,8 @@
 | 프로젝트명 | Desktop Organizer |
 | 목적 | Windows 바탕화면 아이콘을 Container와 Rule로 자동 관리하는 생산성 프로그램 |
 | 핵심 명세 문서 | `docs/03_FunctionSpec.md` (모든 기능의 단일 진실 공급원) |
-| 현재 Phase | **MVP 완료** (Phase 9 완료) |
-| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리), Phase 7 (실시간 바탕화면 감시·새 파일 자동 정리), Phase 8 (설정 저장·불러오기 백업 로테이션, Layout 저장·복원), Phase 9 (LogService 날짜별 파일·10MB 롤링·30일 자동 삭제, 트레이 메뉴 로그 열기) |
+| 현재 Phase | **MVP 완료** (Phase 9 완료). **Post-MVP Phase 10 완료** (F-023, F-024, F-025). Rule 변경 후 컨테이너 소속이 갱신되지 않던 버그 수정 완료. 다음 Phase 착수 대기 — 상세는 `docs/03_FunctionSpec.md` §5, `docs/04_DevPlan.md` §6 참조 |
+| 완료된 기능 | Phase 0 기반 세팅, Phase 1 (F-001~F-003), Phase 2 (투명 오버레이 창, 마우스 패스스루, 트레이 메뉴, DPI 변경 감지), Phase 3 (Container 생성·수정·삭제, config.json 저장), Phase 4 (Container 이동·크기변경·스타일 변경), Phase 5 (아이콘 자동 정렬·순서 저장), Phase 6 (Rule 생성·수정·삭제·우선순위 관리), Phase 7 (실시간 바탕화면 감시·새 파일 자동 정리), Phase 8 (설정 저장·불러오기 백업 로테이션, Layout 저장·복원), Phase 9 (LogService 날짜별 파일·10MB 롤링·30일 자동 삭제, 트레이 메뉴 로그 열기), **Phase 10 F-023 (설정 다이얼로그 — WatcherEnabled/WatcherDebounceMs/IconSpacingPx/MaxContainers/LogLevel/ExcludedPaths 조회·수정, 트레이 감시 토글과 통합, MaxContainers·WatcherDebounceMs·WatcherEnabled 즉시반영 버그 수정 포함)** |
 
 ---
 
@@ -198,3 +198,6 @@ DesktopOrganizer/
 
 *이 파일은 프로젝트가 진행되면서 지속적으로 업데이트된다.*
 *마지막 업데이트: 2026-07-23 — Phase 9 완료 (LogService 날짜별 파일·10MB 롤링·30일 자동삭제·MinLevel 필터링, AppLogLevelExtensions, 트레이 메뉴 로그 파일 열기, 218개 테스트 통과) — MVP F-001~F-022 전체 완료*
+*2026-07-24 — 버그 수정 4건(아이콘 배치 개수 불일치, Container 이동 시 아이콘 미동행, 마우스 패스스루, FileCategory:폴더 룰) + Container 내 아이콘 실행 기능 추가, 225개 테스트 통과. Nimi Places 대비 기능 격차 분석 및 Post-MVP 로드맵(Phase 10~18) 수립 — `docs/03_FunctionSpec.md` §5, `docs/04_DevPlan.md` §6에 반영. Phase 10(F-023 설정 다이얼로그, F-024 현지화 인프라, F-025 외부 링크 확인) 상세 명세 작성 완료.*
+*2026-07-24 — F-023(설정 다이얼로그) 구현 및 사용자 승인 완료. 구현 중 발견된 사전 존재 버그 4건 수정: MaxContainers 미강제 → CanCreateMore() 추가, WatcherDebounceMs 하드코딩 → 설정값 실제 반영, ExcludedPaths 재시작 전까지 미반영 → 즉시 반영, WatcherEnabled 미사용 + 트레이 "감시 일시정지/재개"가 별도 세션 상태였음 → 하나로 통합. ExcludedClsids는 죽은 설정값으로 확인되어 이번 UI에서 제외. 24개 테스트 추가, 246개 테스트 통과. 다음: F-024(다국어 인프라).*
+*2026-07-24 — F-024(다국어 인프라: Strings.resx + Strings.cs, 트레이 메뉴·설정 다이얼로그 이관), F-025(외부 링크 실행 확인, `.url` 더블클릭 시 확인창) 구현 및 사용자 승인 완료 — Phase 10 전체 완료. 이어서 사용자가 보고한 실사용 버그 수정: Rule을 변경/삭제해도 예전에 이미 배치된 아이콘이 더 이상 어떤 Rule에도 맞지 않는데 컨테이너에 그대로 남아있는 문제 (`Initialize()`는 저장된 배치 기록만 믿고 복원, `ApplyAllRules()`는 매칭되는 것만 추가하고 안 맞는 것은 제거하지 않았음) — `ComputeMatchedContainers`/`UnassignNonMatchingIcons`를 추가해 두 경로 모두 현재 활성 Rule을 유일한 근거로 재검증하도록 수정 (F-017 스펙의 "규칙 우선성" 원칙 적용). 8개 테스트 추가, 272개 테스트 통과.*
