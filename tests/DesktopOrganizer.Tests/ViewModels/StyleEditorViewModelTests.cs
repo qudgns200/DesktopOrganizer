@@ -16,7 +16,8 @@ public class StyleEditorViewModelTests
         ShowTitle         = true,
         TitleFontSize     = 12.0,
         TitleFontColor    = "#FFFFFFFF",
-        CornerRadius      = 4.0
+        CornerRadius      = 4.0,
+        AccentColor       = "#FF4C8DFF"
     };
 
     // ── Constructor ───────────────────────────────────────────────
@@ -36,6 +37,17 @@ public class StyleEditorViewModelTests
         Assert.Equal(src.TitleFontSize,     vm.TitleFontSize);
         Assert.Equal(src.TitleFontColor,    vm.TitleFontColor);
         Assert.Equal(src.CornerRadius,      vm.CornerRadius);
+        Assert.Equal(src.AccentColor,       vm.AccentColor);
+    }
+
+    [Fact]
+    public void ToContainerStyle_RoundTripsAccentColor()
+    {
+        var vm = new StyleEditorViewModel(DefaultStyle()) { AccentColor = "#FF00C853" };
+
+        var result = vm.ToContainerStyle();
+
+        Assert.Equal("#FF00C853", result.AccentColor);
     }
 
     // ── Clamp validation ──────────────────────────────────────────

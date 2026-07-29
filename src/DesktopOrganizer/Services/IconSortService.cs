@@ -1,3 +1,4 @@
+using DesktopOrganizer.Interop;
 using DesktopOrganizer.Models;
 
 namespace DesktopOrganizer.Services;
@@ -8,10 +9,12 @@ namespace DesktopOrganizer.Services;
 /// </summary>
 public class IconSortService
 {
-    // Base grid cell size (pixels at 100% DPI). The vertical cell is taller than the
-    // horizontal one because a desktop icon reserves space for its (often two-line) label.
-    // These are deliberately >= the Windows desktop grid pitch so that, when the shell's
-    // "Align icons to grid" option is active, no two icons snap into the same cell.
+    // Base grid cell size (pixels at 100% DPI), used as a FLOOR. The real desktop grid
+    // cell (measured via LVM_GETITEMSPACING) is used when it is larger, so that with the
+    // shell's "Align icons to grid" active no two icons snap into the same cell (which the
+    // shell would otherwise resolve by scattering them — the reported move-scatter bug).
+    // The vertical cell is taller than the horizontal one because a desktop icon reserves
+    // space for its (often two-line) label.
     public const int IconCellWidth  = 75;
     public const int IconCellHeight = 90;
 
@@ -25,14 +28,48 @@ public class IconSortService
     // Optional: supplies the user-configured icon spacing (F-010). Null in unit tests.
     private readonly SettingsService? _settings;
 
-    /// <summary>Parameterless ctor — spacing defaults to 0 (used by unit tests).</summary>
+    // Optional: measures the real desktop grid cell size in DIPs. Null in unit tests
+    // (→ base constants only). Wired to DesktopIconInterop.GetDesktopGridCellSize in production.
+    private readonly Func<(double Cx, double Cy)?>? _gridCellProvider;
+
+    /// <summary>Parameterless ctor — spacing 0, no grid measurement (used by unit tests).</summary>
     public IconSortService() { }
 
-    /// <summary>Production ctor — reads <see cref="AppSettings.IconSpacingPx"/> for grid spacing.</summary>
-    public IconSortService(SettingsService settings) => _settings = settings;
+    /// <summary>Production ctor — reads spacing from settings and measures the real desktop grid.</summary>
+    public IconSortService(SettingsService settings)
+        : this(settings, DesktopIconInterop.GetDesktopGridCellSize) { }
+
+    /// <summary>Full ctor — the grid-cell provider is injectable for unit testing.</summary>
+    internal IconSortService(SettingsService? settings, Func<(double Cx, double Cy)?>? gridCellProvider)
+    {
+        _settings         = settings;
+        _gridCellProvider = gridCellProvider;
+    }
 
     /// <summary>User-configured spacing added to each base cell (F-010 "정렬 간격").</summary>
     private int Spacing => _settings?.Config.Settings.IconSpacingPx ?? 0;
+
+    /// <summary>
+    /// Effective per-icon cell pitch in DIPs: the larger of the base constant and the
+    /// measured desktop grid cell, plus the user spacing. Re-measured each call so it stays
+    /// correct across DPI / resolution changes (the underlying query is a single cheap message).
+    /// </summary>
+    private (int W, int H) EffectiveCell()
+    {
+        int w = IconCellWidth;
+        int h = IconCellHeight;
+
+        (double Cx, double Cy)? grid = null;
+        try { grid = _gridCellProvider?.Invoke(); } catch { grid = null; }
+
+        if (grid is { } g)
+        {
+            if (g.Cx > 0) w = Math.Max(w, (int)Math.Ceiling(g.Cx));
+            if (g.Cy > 0) h = Math.Max(h, (int)Math.Ceiling(g.Cy));
+        }
+
+        return (w + Spacing, h + Spacing);
+    }
 
     // ── F-010: Sort ───────────────────────────────────────────────
 
@@ -74,9 +111,8 @@ public class IconSortService
     /// </summary>
     public void ComputePositions(Container container, IList<IconInfo> sortedIcons)
     {
-        // Effective cell pitch = base cell + user-configured spacing.
-        int cellW = IconCellWidth  + Spacing;
-        int cellH = IconCellHeight + Spacing;
+        // Effective cell pitch = max(base, measured desktop grid) + user spacing.
+        var (cellW, cellH) = EffectiveCell();
 
         double topStart = container.Y + PaddingY
             + (container.Style.ShowTitle ? TitleBarHeight : 0);
@@ -116,8 +152,7 @@ public class IconSortService
     {
         if (iconCount <= 0) return null;
 
-        int cellW = IconCellWidth  + Spacing;
-        int cellH = IconCellHeight + Spacing;
+        var (cellW, cellH) = EffectiveCell();
 
         double left = PaddingX;
         double top  = PaddingY + (container.Style.ShowTitle ? TitleBarHeight : 0);

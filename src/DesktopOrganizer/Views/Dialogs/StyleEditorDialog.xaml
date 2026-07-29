@@ -3,16 +3,18 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:DesktopOrganizer.Views.Controls"
         Title="Container 스타일 변경"
-        Width="580" Height="420"
+        Width="580" Height="470"
         WindowStyle="ToolWindow"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
-        <conv:StringToBrushConverter         x:Key="StringToBrush"/>
-        <conv:BoolToVisibilityConverter      x:Key="BoolToVis"/>
-        <conv:DoubleToCornerRadiusConverter  x:Key="DblToCornerRadius"/>
+        <conv:StringToBrushConverter            x:Key="StringToBrush"/>
+        <conv:BoolToVisibilityConverter         x:Key="BoolToVis"/>
+        <conv:DoubleToCornerRadiusConverter     x:Key="DblToCornerRadius"/>
+        <conv:DoubleToTopCornerRadiusConverter  x:Key="DblToTopCornerRadius"/>
+        <conv:BorderStyleToDashArrayConverter   x:Key="BorderStyleToDash"/>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -63,6 +65,21 @@
                 <Slider Value="{Binding CornerRadius}" Minimum="0" Maximum="40"
                         TickFrequency="2" IsSnapToTickEnabled="False" SmallChange="1"/>
 
+                <!-- Accent Color -->
+                <TextBlock Text="강조 색상 (헤더 포인트, ARGB 16진수)" Margin="0,10,0,2"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding AccentColor, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="4,3"/>
+                    <Border Grid.Column="1" Width="24" Height="24" Margin="6,0,0,0"
+                            CornerRadius="4" BorderBrush="#888888" BorderThickness="1"
+                            Background="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
+                </Grid>
+
                 <!-- Show Title -->
                 <CheckBox Content="제목 표시" IsChecked="{Binding ShowTitle}" Margin="0,10,0,0"/>
 
@@ -85,26 +102,48 @@
                 <TextBlock Text="미리보기" Foreground="#888888" FontSize="11"
                            HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8"/>
 
-                <!-- Simulated container preview -->
-                <Grid Margin="16,28,16,16" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <!-- Simulated frosted-card preview (matches ContainerControl) -->
+                <Grid Margin="20,32,20,20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid.Effect>
+                        <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270"
+                                          Opacity="0.55" Color="#FF000000"/>
+                    </Grid.Effect>
+
                     <!-- Background fill -->
                     <Border Background="{Binding BackgroundColor, Converter={StaticResource StringToBrush}}"
                             Opacity="{Binding BackgroundOpacity}"
                             CornerRadius="{Binding CornerRadius, Converter={StaticResource DblToCornerRadius}}"/>
-                    <!-- Border outline -->
-                    <Border BorderBrush="{Binding BorderColor, Converter={StaticResource StringToBrush}}"
-                            BorderThickness="{Binding BorderThickness}"
-                            CornerRadius="{Binding CornerRadius, Converter={StaticResource DblToCornerRadius}}"/>
-                    <!-- Title bar preview -->
-                    <Border Background="#60000000" Height="26" VerticalAlignment="Top"
-                            CornerRadius="{Binding CornerRadius, Converter={StaticResource DblToCornerRadius}}"
+
+                    <!-- Header preview: accent dot + title + accent underline -->
+                    <Border Height="28" VerticalAlignment="Top"
+                            CornerRadius="{Binding CornerRadius, Converter={StaticResource DblToTopCornerRadius}}"
                             Visibility="{Binding ShowTitle, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Container 이름"
-                                   Foreground="{Binding TitleFontColor, Converter={StaticResource StringToBrush}}"
-                                   FontSize="{Binding TitleFontSize}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Offset="0" Color="#4D000000"/>
+                                <GradientStop Offset="1" Color="#73000000"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" Margin="10,0,8,0" VerticalAlignment="Center">
+                                <Ellipse Width="8" Height="8" Margin="0,0,7,0"
+                                         Fill="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
+                                <TextBlock Text="Container 이름"
+                                           Foreground="{Binding TitleFontColor, Converter={StaticResource StringToBrush}}"
+                                           FontSize="{Binding TitleFontSize}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Border Height="2" VerticalAlignment="Bottom"
+                                    Background="{Binding AccentColor, Converter={StaticResource StringToBrush}}"/>
+                        </Grid>
                     </Border>
+
+                    <!-- Border outline (dash-aware) -->
+                    <Rectangle RadiusX="{Binding CornerRadius}" RadiusY="{Binding CornerRadius}"
+                               Stroke="{Binding BorderColor, Converter={StaticResource StringToBrush}}"
+                               StrokeThickness="{Binding BorderThickness}"
+                               StrokeDashArray="{Binding BorderStyle, Converter={StaticResource BorderStyleToDash}}"/>
                 </Grid>
             </Grid>
         </Border>

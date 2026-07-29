@@ -7,11 +7,13 @@
              IsHitTestVisible="True">
 
     <UserControl.Resources>
-        <local:BoolToVisibilityConverter      x:Key="BoolToVis"/>
-        <local:BoolToVisibilityConverter      x:Key="InvBoolToVis" Invert="True"/>
-        <local:StringToBrushConverter         x:Key="StringToBrush"/>
-        <local:DoubleToThicknessConverter     x:Key="DblToThickness"/>
-        <local:DoubleToCornerRadiusConverter  x:Key="DblToCornerRadius"/>
+        <local:BoolToVisibilityConverter        x:Key="BoolToVis"/>
+        <local:BoolToVisibilityConverter        x:Key="InvBoolToVis" Invert="True"/>
+        <local:StringToBrushConverter           x:Key="StringToBrush"/>
+        <local:DoubleToThicknessConverter       x:Key="DblToThickness"/>
+        <local:DoubleToCornerRadiusConverter    x:Key="DblToCornerRadius"/>
+        <local:DoubleToTopCornerRadiusConverter x:Key="DblToTopCornerRadius"/>
+        <local:BorderStyleToDashArrayConverter  x:Key="BorderStyleToDash"/>
     </UserControl.Resources>
 
     <!-- Right-click context menu (F-005 rename, F-006 delete, F-009 style) -->
@@ -24,16 +26,20 @@
         </ContextMenu>
     </UserControl.ContextMenu>
 
-    <!--
-        Outer Border: border decoration only (no background fill).
-        A separate inner Border provides the background with its own opacity
-        so the title bar is not dimmed by BackgroundOpacity.
-    -->
-    <Border BorderBrush="{Binding StyleBorderColor, Converter={StaticResource StringToBrush}}"
-            BorderThickness="{Binding StyleBorderThickness, Converter={StaticResource DblToThickness}}"
-            CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}">
+    <!-- Root Grid does not clip, so the drop shadow can render beyond the card bounds -->
+    <Grid>
+        <!--
+            Frosted card (F-009). A soft drop shadow lifts the card off any wallpaper.
+            The BODY fill stays translucent so the real desktop icons underneath show
+            through (비침습 원칙); visual weight lives in the header, border, shadow, accent.
+        -->
         <Grid>
-            <!-- Background fill layer (F-009: colour + opacity) -->
+            <Grid.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270"
+                                  Opacity="0.55" Color="#FF000000"/>
+            </Grid.Effect>
+
+            <!-- Background fill layer (F-009: colour + opacity), full rounded rect -->
             <Border Background="{Binding StyleBackgroundColor, Converter={StaticResource StringToBrush}}"
                     Opacity="{Binding StyleBackgroundOpacity}"
                     CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}"/>
@@ -46,36 +52,62 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Title bar (F-007 drag handle, F-005 rename, F-009 style) -->
+                <!-- Header bar (F-007 drag handle, F-005 rename, F-009 style + accent) -->
                 <Border Grid.Row="0"
-                        Background="#60000000"
-                        CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToCornerRadius}}"
-                        MinHeight="26"
+                        CornerRadius="{Binding StyleCornerRadius, Converter={StaticResource DblToTopCornerRadius}}"
+                        MinHeight="28"
                         Visibility="{Binding StyleShowTitle, Converter={StaticResource BoolToVis}}"
                         Cursor="SizeAll"
                         MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown"
                         MouseMove="OnTitleBarMouseMove"
                         MouseLeftButtonUp="OnTitleBarMouseLeftButtonUp">
-                    <Grid Margin="6,0,4,0">
-                        <!-- Normal mode -->
-                        <TextBlock Text="{Binding Name}"
-                                   Foreground="{Binding StyleTitleFontColor, Converter={StaticResource StringToBrush}}"
-                                   FontSize="{Binding StyleTitleFontSize}"
-                                   VerticalAlignment="Center"
-                                   Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
-                        <!-- Inline edit mode -->
-                        <TextBox x:Name="NameEditor"
-                                 Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Foreground="White"
-                                 SelectionBrush="LightBlue"
-                                 CaretBrush="White"
-                                 FontSize="12"
-                                 VerticalAlignment="Center"
-                                 KeyDown="OnNameEditorKeyDown"
-                                 LostFocus="OnNameEditorLostFocus"/>
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Offset="0" Color="#4D000000"/>
+                            <GradientStop Offset="1" Color="#73000000"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Grid>
+                        <!-- Header content: accent dot + title / inline editor -->
+                        <Grid Margin="10,0,8,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Accent dot -->
+                            <Ellipse Grid.Column="0" Width="8" Height="8" Margin="0,0,7,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding StyleAccentColor, Converter={StaticResource StringToBrush}}"/>
+
+                            <!-- Normal mode -->
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Name}"
+                                       Foreground="{Binding StyleTitleFontColor, Converter={StaticResource StringToBrush}}"
+                                       FontSize="{Binding StyleTitleFontSize}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
+                            <!-- Inline edit mode -->
+                            <TextBox Grid.Column="1"
+                                     x:Name="NameEditor"
+                                     Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="White"
+                                     SelectionBrush="LightBlue"
+                                     CaretBrush="White"
+                                     FontSize="12"
+                                     VerticalAlignment="Center"
+                                     KeyDown="OnNameEditorKeyDown"
+                                     LostFocus="OnNameEditorLostFocus"/>
+                        </Grid>
+
+                        <!-- Accent underline separating header from body -->
+                        <Border Height="2" VerticalAlignment="Bottom"
+                                Background="{Binding StyleAccentColor, Converter={StaticResource StringToBrush}}"/>
                     </Grid>
                 </Border>
 
@@ -136,7 +168,17 @@
                             MouseMove="OnResizeHandleMouseMove"
                             MouseLeftButtonUp="OnResizeHandleMouseUp"/>
                 </Grid>
+
+                <!-- Crisp rounded border outline on top; supports dashed/dotted (F-009).
+                     Hit-test invisible so it never blocks the handles/body beneath. -->
+                <Rectangle Grid.RowSpan="2"
+                           IsHitTestVisible="False"
+                           RadiusX="{Binding StyleCornerRadius}"
+                           RadiusY="{Binding StyleCornerRadius}"
+                           Stroke="{Binding StyleBorderColor, Converter={StaticResource StringToBrush}}"
+                           StrokeThickness="{Binding StyleBorderThickness}"
+                           StrokeDashArray="{Binding StyleBorderStyle, Converter={StaticResource BorderStyleToDash}}"/>
             </Grid>
         </Grid>
-    </Border>
+    </Grid>
 </UserControl>

@@ -300,4 +300,81 @@ public class IconSortServiceTests
         Assert.Equal(0, result[0].OrderIndex);
         Assert.Equal(c.Id, result[0].AssignedContainerId);
     }
+
+    // ── F-010 bug fix: cell pitch floored to measured desktop grid ─
+
+    /// <summary>Builds an IconSortService whose grid measurement returns a fixed size (DIP).</summary>
+    private static IconSortService WithGrid(double? cx, double? cy) =>
+        new(settings: null,
+            gridCellProvider: cx is null || cy is null ? null : () => (cx.Value, cy.Value));
+
+    [Fact]
+    public void ComputePositions_MeasuredGridLargerThanBase_UsesMeasuredPitch()
+    {
+        // Base cell width 75; measured grid 100 → effective pitch 100.
+        var sut = WithGrid(100, 100);
+        var c   = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
+        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+
+        sut.ComputePositions(c, icons);
+
+        // Column 1 icon should sit one measured cell (100) to the right of column 0, not 75.
+        Assert.Equal(IconSortService.PaddingX + 100, icons[1].X);
+    }
+
+    [Fact]
+    public void ComputePositions_MeasuredGridSmallerThanBase_KeepsBaseFloor()
+    {
+        // Measured grid 40 is below the 75 base floor → base 75 wins.
+        var sut = WithGrid(40, 40);
+        var c   = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
+        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+
+        sut.ComputePositions(c, icons);
+
+        Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+    }
+
+    [Fact]
+    public void ComputePositions_NoGridProvider_UsesBaseConstants()
+    {
+        // Parameterless _sut has no provider → base 75/90.
+        var c = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
+        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+
+        _sut.ComputePositions(c, icons);
+
+        Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+    }
+
+    [Fact]
+    public void ComputePositions_MeasuredGridReducesIconsPerRow()
+    {
+        // Width fits 3 base cells (75) but only 2 measured cells (100).
+        var sut = WithGrid(100, 100);
+        var c   = MakeContainer(x: 0, y: 0,
+            w: IconSortService.PaddingX * 2 + 100 * 2 + 20, // room for exactly 2 columns of 100
+            h: 1000, showTitle: false);
+        var icons = Enumerable.Range(0, 3).Select(i => MakeIcon($"Icon{i}")).ToList();
+
+        sut.ComputePositions(c, icons);
+
+        // 2 per row → icon 2 wraps to row 1 (same X as icon 0, larger Y).
+        Assert.Equal(icons[0].X, icons[2].X);
+        Assert.True(icons[2].Y > icons[0].Y);
+    }
+
+    [Fact]
+    public void ComputePositions_GridProviderThrows_FallsBackToBase()
+    {
+        var sut = new IconSortService(settings: null,
+            gridCellProvider: () => throw new InvalidOperationException("measurement failed"));
+        var c = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
+        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+
+        var ex = Record.Exception(() => sut.ComputePositions(c, icons));
+
+        Assert.Null(ex);
+        Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+    }
 }

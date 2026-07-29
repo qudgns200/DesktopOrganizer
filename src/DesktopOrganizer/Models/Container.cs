@@ -22,15 +22,21 @@ public enum BorderStyle
 
 public class ContainerStyle
 {
-    public string BackgroundColor { get; set; } = "#44000000";
-    public double BackgroundOpacity { get; set; } = 0.8;
-    public string BorderColor { get; set; } = "#CCFFFFFF";
+    // Frosted-card defaults (F-009). The BODY fill is kept intentionally translucent so the
+    // real desktop icons underneath stay clearly visible (비침습 원칙); visual weight lives in
+    // the header bar, the soft border, the drop shadow, and the accent colour.
+    public string BackgroundColor { get; set; } = "#59171A21";  // cool dark slate, ~35% alpha
+    public double BackgroundOpacity { get; set; } = 0.5;         // effective body alpha ≈ 0.18
+    public string BorderColor { get; set; } = "#40FFFFFF";       // subtle 25% white hairline
     public double BorderThickness { get; set; } = 1.0;
     public BorderStyle BorderStyle { get; set; } = BorderStyle.Solid;
     public bool ShowTitle { get; set; } = true;
     public double TitleFontSize { get; set; } = 12.0;
     public string TitleFontColor { get; set; } = "#FFFFFFFF";
-    public double CornerRadius { get; set; } = 4.0;
+    public double CornerRadius { get; set; } = 10.0;             // rounded card
+
+    /// <summary>Accent colour for the header dot/strip (F-009 / Phase 12 F-027 preview).</summary>
+    public string AccentColor { get; set; } = "#FF4C8DFF";       // pleasant blue
 }
 
 public class IconOrderEntry

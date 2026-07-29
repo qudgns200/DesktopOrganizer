@@ -18,6 +18,7 @@ internal static class DesktopIconInterop
     private const int LVM_GETITEMCOUNT     = LVM_FIRST + 4;
     private const int LVM_GETITEMPOSITION  = LVM_FIRST + 16;
     private const int LVM_SETITEMPOSITION  = LVM_FIRST + 15;   // MAKELONG(x,y) — works cross-process
+    private const int LVM_GETITEMSPACING   = LVM_FIRST + 51;   // grid cell size; wParam=FALSE → large-icon view
     private const int LVM_GETITEMW         = LVM_FIRST + 75;
     private const uint LVIF_TEXT           = 0x0001;
 
@@ -179,16 +180,27 @@ internal static class DesktopIconInterop
                         // 2) Extension-insensitive fallback. Windows may hide known-type
                         //    extensions in the ListView, so compare both sides with the
                         //    extension stripped (handles ".exe"/".pdf" hidden or shown).
+                        //    Only bind when EXACTLY ONE key matches — otherwise it's
+                        //    ambiguous (e.g. report.pdf + report.docx both strip to
+                        //    "report") and binding the wrong icon would swap their spots.
                         var nameNoExt = Path.GetFileNameWithoutExtension(name);
-                        var fallback = nfcLookup.FirstOrDefault(kvp =>
+                        var candidates = nfcLookup.Where(kvp =>
                             Path.GetFileNameWithoutExtension(kvp.Key)
                                 .Equals(name,      StringComparison.OrdinalIgnoreCase) ||
                             Path.GetFileNameWithoutExtension(kvp.Key)
-                                .Equals(nameNoExt, StringComparison.OrdinalIgnoreCase));
-                        if (fallback.Key is not null)
+                                .Equals(nameNoExt, StringComparison.OrdinalIgnoreCase))
+                            .Take(2).ToList();
+
+                        if (candidates.Count == 1)
                         {
-                            pos        = fallback.Value.Pos;
-                            matchedKey = fallback.Value.OriginalKey;
+                            pos        = candidates[0].Value.Pos;
+                            matchedKey = candidates[0].Value.OriginalKey;
+                        }
+                        else if (candidates.Count > 1)
+                        {
+                            LogService.Instance.Warn("Interop",
+                                $"WriteIconPositions: ambiguous name '{name}' matches multiple keys " +
+                                "after extension-strip — skipped to avoid swapping icons.");
                         }
                     }
 
@@ -232,6 +244,33 @@ internal static class DesktopIconInterop
         LogService.Instance.Info("Interop",
             $"WriteIconPositions: repositioned {moved}/{positions.Count} icon(s) (DPI scale {dpiScale:F2})");
         return moved;
+    }
+
+    /// <summary>
+    /// Returns the desktop's large-icon grid cell size (cx, cy) in WPF DIPs, or null if it
+    /// cannot be measured. Used to floor our container layout's cell pitch (F-010) so that,
+    /// when the shell's "Align icons to grid" is active, each icon lands in its own grid cell
+    /// instead of colliding — which the shell otherwise resolves by scattering icons.
+    /// </summary>
+    public static (double Cx, double Cy)? GetDesktopGridCellSize()
+    {
+        var listView = FindDesktopListView();
+        if (listView == IntPtr.Zero) return null;
+
+        // wParam FALSE → spacing for the large-icon view (the desktop's mode).
+        var raw    = SendMessage(listView, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
+        int packed = raw.ToInt32();
+        if (packed == 0) return null;
+
+        int cxPhysical = packed & 0xFFFF;
+        int cyPhysical = (packed >> 16) & 0xFFFF;
+        if (cxPhysical <= 0 || cyPhysical <= 0) return null;
+
+        double dpiScale = GetDpiForSystem() / 96.0;
+        if (dpiScale <= 0) dpiScale = 1.0;
+
+        // Layout math works in DIPs; WriteIconPositions converts back to physical px on write.
+        return (cxPhysical / dpiScale, cyPhysical / dpiScale);
     }
 
     /// <summary>

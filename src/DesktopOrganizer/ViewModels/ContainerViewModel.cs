@@ -3,6 +3,8 @@ using System.Windows.Media;
 using DesktopOrganizer.Models;
 using DesktopOrganizer.Services;
 using DesktopOrganizer.ViewModels.Base;
+// UseWindowsForms=true: resolve BorderStyle ambiguity with System.Windows.Forms.BorderStyle
+using BorderStyle = DesktopOrganizer.Models.BorderStyle;
 
 namespace DesktopOrganizer.ViewModels;
 
@@ -70,10 +72,12 @@ public class ContainerViewModel : ObservableObject
     public double StyleBackgroundOpacity => _model.Style.BackgroundOpacity;
     public string StyleBorderColor       => _model.Style.BorderColor;
     public double StyleBorderThickness   => _model.Style.BorderThickness;
+    public BorderStyle StyleBorderStyle  => _model.Style.BorderStyle;
     public bool   StyleShowTitle         => _model.Style.ShowTitle;
     public double StyleTitleFontSize     => _model.Style.TitleFontSize;
     public string StyleTitleFontColor    => _model.Style.TitleFontColor;
     public double StyleCornerRadius      => _model.Style.CornerRadius;
+    public string StyleAccentColor       => _model.Style.AccentColor;
 
     // ── Inline-edit state ────────────────────────────────────────
 
@@ -182,10 +186,12 @@ public class ContainerViewModel : ObservableObject
         OnPropertyChanged(nameof(StyleBackgroundOpacity));
         OnPropertyChanged(nameof(StyleBorderColor));
         OnPropertyChanged(nameof(StyleBorderThickness));
+        OnPropertyChanged(nameof(StyleBorderStyle));
         OnPropertyChanged(nameof(StyleShowTitle));
         OnPropertyChanged(nameof(StyleTitleFontSize));
         OnPropertyChanged(nameof(StyleTitleFontColor));
         OnPropertyChanged(nameof(StyleCornerRadius));
+        OnPropertyChanged(nameof(StyleAccentColor));
     }
 
     // ── Private helpers ───────────────────────────────────────────

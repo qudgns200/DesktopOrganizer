@@ -20,6 +20,7 @@ public class StyleEditorViewModel : ObservableObject
     private double      _titleFontSize;
     private string      _titleFontColor;
     private double      _cornerRadius;
+    private string      _accentColor;
 
     public StyleEditorViewModel(ContainerStyle source)
     {
@@ -32,6 +33,7 @@ public class StyleEditorViewModel : ObservableObject
         _titleFontSize     = source.TitleFontSize;
         _titleFontColor    = source.TitleFontColor;
         _cornerRadius      = source.CornerRadius;
+        _accentColor       = source.AccentColor;
     }
 
     public string BackgroundColor
@@ -88,6 +90,12 @@ public class StyleEditorViewModel : ObservableObject
         set => SetField(ref _cornerRadius, Math.Clamp(value, 0.0, 40.0));
     }
 
+    public string AccentColor
+    {
+        get => _accentColor;
+        set => SetField(ref _accentColor, value);
+    }
+
     /// <summary>All available border styles for ComboBox binding.</summary>
     public IReadOnlyList<BorderStyle> BorderStyleOptions { get; } = Enum.GetValues<BorderStyle>();
 
@@ -102,6 +110,7 @@ public class StyleEditorViewModel : ObservableObject
         ShowTitle         = _showTitle,
         TitleFontSize     = _titleFontSize,
         TitleFontColor    = _titleFontColor,
-        CornerRadius      = _cornerRadius
+        CornerRadius      = _cornerRadius,
+        AccentColor       = _accentColor
     };
 }
