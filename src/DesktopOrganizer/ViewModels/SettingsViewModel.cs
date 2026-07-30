@@ -20,6 +20,7 @@ public class SettingsViewModel : ObservableObject
     private int         _maxContainers;
     private AppLogLevel _logLevel;
     private bool        _confirmExternalLinkLaunch;
+    private bool        _disableDesktopIconGridSettings;
     private string      _newExcludedPath = string.Empty;
 
     public SettingsViewModel(AppSettings source)
@@ -30,6 +31,7 @@ public class SettingsViewModel : ObservableObject
         _maxContainers             = source.MaxContainers;
         _logLevel                  = source.LogLevel;
         _confirmExternalLinkLaunch = source.ConfirmExternalLinkLaunch;
+        _disableDesktopIconGridSettings = source.DisableDesktopIconGridSettings;
         ExcludedPaths              = new ObservableCollection<string>(source.ExcludedPaths);
     }
 
@@ -71,6 +73,13 @@ public class SettingsViewModel : ObservableObject
     {
         get => _confirmExternalLinkLaunch;
         set => SetField(ref _confirmExternalLinkLaunch, value);
+    }
+
+    /// <summary>F-010 item 8: auto-disable the desktop's align-to-grid / auto-arrange.</summary>
+    public bool DisableDesktopIconGridSettings
+    {
+        get => _disableDesktopIconGridSettings;
+        set => SetField(ref _disableDesktopIconGridSettings, value);
     }
 
     public ObservableCollection<string> ExcludedPaths { get; }
@@ -134,6 +143,7 @@ public class SettingsViewModel : ObservableObject
         target.MaxContainers             = MaxContainers;
         target.LogLevel                  = LogLevel;
         target.ConfirmExternalLinkLaunch = ConfirmExternalLinkLaunch;
+        target.DisableDesktopIconGridSettings = DisableDesktopIconGridSettings;
         target.ExcludedPaths             = ExcludedPaths.ToList();
     }
 }

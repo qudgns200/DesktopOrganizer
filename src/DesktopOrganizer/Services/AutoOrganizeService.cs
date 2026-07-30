@@ -21,6 +21,7 @@ public class AutoOrganizeService : IDisposable
     private readonly DesktopWatcherService  _watcher;
     private readonly IconSortService        _sortService;
     private readonly IconOrderService       _orderService;
+    private readonly DesktopGridService?    _desktopGrid;
 
     // fullPath → IconInfo (all known desktop icons)
     private readonly Dictionary<string, IconInfo> _icons =
@@ -40,7 +41,8 @@ public class AutoOrganizeService : IDisposable
         SettingsService       settings,
         DesktopWatcherService watcher,
         IconSortService       sortService,
-        IconOrderService      orderService)
+        IconOrderService      orderService,
+        DesktopGridService?   desktopGrid = null)
     {
         _reader       = reader;
         _exclusion    = exclusion;
@@ -50,6 +52,7 @@ public class AutoOrganizeService : IDisposable
         _watcher      = watcher;
         _sortService  = sortService;
         _orderService = orderService;
+        _desktopGrid  = desktopGrid;
     }
 
     // ── Startup ───────────────────────────────────────────────────
@@ -289,6 +292,8 @@ public class AutoOrganizeService : IDisposable
     {
         _exclusion.UpdateExcludedPaths(_settings.Config.Settings.ExcludedPaths);
         _watcher.DebounceMs = _settings.Config.Settings.WatcherDebounceMs;
+        // F-010 item 8: applies a flipped DisableDesktopIconGridSettings without a restart.
+        _desktopGrid?.EnsureDisabled(force: true);
 
         if (_settings.Config.Settings.WatcherEnabled)
             _watcher.Start();
@@ -573,7 +578,12 @@ public class AutoOrganizeService : IDisposable
     /// Returns the number of icons actually moved by Win32.
     /// </summary>
     protected virtual int WritePositions(Dictionary<string, (int X, int Y)> positions)
-        => DesktopIconInterop.WriteIconPositions(positions);
+    {
+        // F-010 item 8: the user can re-enable align-to-grid from the desktop menu at any time,
+        // so re-check before every batch (throttled internally).
+        _desktopGrid?.EnsureDisabled();
+        return DesktopIconInterop.WriteIconPositions(positions);
+    }
 
     /// <summary>Builds a display-name → (X,Y) map from a sorted icon list.</summary>
     private static Dictionary<string, (int X, int Y)> BuildPositionDict(IList<IconInfo> sorted)

@@ -50,25 +50,72 @@ public class IconSortService
     private int Spacing => _settings?.Config.Settings.IconSpacingPx ?? 0;
 
     /// <summary>
-    /// Effective per-icon cell pitch in DIPs: the larger of the base constant and the
-    /// measured desktop grid cell, plus the user spacing. Re-measured each call so it stays
-    /// correct across DPI / resolution changes (the underlying query is a single cheap message).
+    /// Resolves the icon grid for <paramref name="container"/> — the single source of truth for
+    /// placement (F-010 item 7). Re-measured each call so it stays correct across DPI /
+    /// resolution changes (the underlying query is one cheap window message).
+    ///
+    /// Two properties make the result safe against the shell's "Align icons to grid", which
+    /// re-quantizes whatever coordinates we send to its own cell:
+    ///   1. The pitch is an exact INTEGER MULTIPLE of the measured cell, so consecutive icons
+    ///      land in consecutive cells instead of colliding and being scattered by the shell.
+    ///      (The previous fix added the user spacing on top of the measured cell, making the
+    ///      pitch a non-multiple — which is what re-introduced the scatter.)
+    ///   2. The origin is snapped to a cell boundary, so the whole block cannot sit half a cell
+    ///      off the container it belongs to.
     /// </summary>
-    private (int W, int H) EffectiveCell()
+    public IconGridLayout ComputeGrid(Container container)
     {
-        int w = IconCellWidth;
-        int h = IconCellHeight;
+        var (cellX, cellY) = MeasureShellCell();
 
-        (double Cx, double Cy)? grid = null;
-        try { grid = _gridCellProvider?.Invoke(); } catch { grid = null; }
+        double pitchX = QuantizePitch(IconCellWidth  + Spacing, cellX);
+        double pitchY = QuantizePitch(IconCellHeight + Spacing, cellY);
 
-        if (grid is { } g)
+        double rawX = container.X + PaddingX;
+        double rawY = container.Y + PaddingY + (container.Style.ShowTitle ? TitleBarHeight : 0);
+
+        // Ceiling (not Round) so the first row can never land above the content box.
+        double originX = AlignToCell(rawX, cellX);
+        double originY = AlignToCell(rawY, cellY);
+
+        // Derive icons-per-row from the ALIGNED origin, otherwise the alignment inset can push
+        // the last column past the container's right edge.
+        double availableWidth = (container.X + container.Width - PaddingX) - originX;
+        int iconsPerRow = Math.Max(1, (int)(availableWidth / pitchX));
+
+        return new IconGridLayout(originX, originY, pitchX, pitchY, iconsPerRow, cellX, cellY);
+    }
+
+    /// <summary>
+    /// Rounds <paramref name="desiredPitch"/> to the nearest whole number of shell cells
+    /// (minimum one cell). Returns the desired pitch unchanged when the cell is unknown.
+    /// Round rather than Ceiling: at the defaults (base 75 + spacing 8 = 83, cell 80) Ceiling
+    /// would jump to 2 cells = 160 and halve icons-per-row for every existing user.
+    /// A consequence is that IconSpacingPx becomes a coarse, cell-granular control.
+    /// </summary>
+    private static double QuantizePitch(double desiredPitch, double? shellCell)
+    {
+        if (shellCell is not > 0) return desiredPitch;
+        double cell  = shellCell.Value;
+        int    cells = Math.Max(1, (int)Math.Round(desiredPitch / cell, MidpointRounding.AwayFromZero));
+        return cells * cell;
+    }
+
+    private static double AlignToCell(double value, double? shellCell)
+        => shellCell is > 0 ? Math.Ceiling(value / shellCell.Value) * shellCell.Value : value;
+
+    /// <summary>Measures the real desktop grid cell in DIPs; (null, null) when unavailable.</summary>
+    private (double? Cx, double? Cy) MeasureShellCell()
+    {
+        (double Cx, double Cy)? grid;
+        try { grid = _gridCellProvider?.Invoke(); }
+        catch (Exception ex)
         {
-            if (g.Cx > 0) w = Math.Max(w, (int)Math.Ceiling(g.Cx));
-            if (g.Cy > 0) h = Math.Max(h, (int)Math.Ceiling(g.Cy));
+            LogService.Instance.Warn("F-010", $"Desktop grid measurement threw: {ex.Message}");
+            grid = null;
         }
 
-        return (w + Spacing, h + Spacing);
+        if (grid is not { } g) return (null, null);
+        return (g.Cx > 0 ? g.Cx : null, g.Cy > 0 ? g.Cy : null);
     }
 
     // ── F-010: Sort ───────────────────────────────────────────────
@@ -111,23 +158,14 @@ public class IconSortService
     /// </summary>
     public void ComputePositions(Container container, IList<IconInfo> sortedIcons)
     {
-        // Effective cell pitch = max(base, measured desktop grid) + user spacing.
-        var (cellW, cellH) = EffectiveCell();
-
-        double topStart = container.Y + PaddingY
-            + (container.Style.ShowTitle ? TitleBarHeight : 0);
-
-        double availableWidth = container.Width - PaddingX * 2;
-        int iconsPerRow = Math.Max(1, (int)(availableWidth / cellW));
+        var grid = ComputeGrid(container);
 
         for (int i = 0; i < sortedIcons.Count; i++)
         {
-            int col = i % iconsPerRow;
-            int row = i / iconsPerRow;
-
-            sortedIcons[i].X                  = (int)(container.X + PaddingX + col * cellW);
-            sortedIcons[i].Y                  = (int)(topStart              + row * cellH);
-            sortedIcons[i].OrderIndex         = i;
+            var (x, y) = grid.PositionOf(i);
+            sortedIcons[i].X                   = x;
+            sortedIcons[i].Y                   = y;
+            sortedIcons[i].OrderIndex          = i;
             sortedIcons[i].AssignedContainerId = container.Id;
         }
     }
@@ -152,21 +190,21 @@ public class IconSortService
     {
         if (iconCount <= 0) return null;
 
-        var (cellW, cellH) = EffectiveCell();
+        // Consume the same grid as ComputePositions so the two can never disagree.
+        // The grid origin is absolute, so convert the container-local point to absolute.
+        var grid = ComputeGrid(container);
+        double absX = container.X + localX;
+        double absY = container.Y + localY;
 
-        double left = PaddingX;
-        double top  = PaddingY + (container.Style.ShowTitle ? TitleBarHeight : 0);
+        // Points left of / above the aligned origin (inside the padding, or the title bar)
+        // belong to no cell.
+        if (absX < grid.OriginX || absY < grid.OriginY) return null;
 
-        if (localX < left || localY < top) return null;
+        int col = (int)((absX - grid.OriginX) / grid.PitchX);
+        int row = (int)((absY - grid.OriginY) / grid.PitchY);
+        if (col < 0 || col >= grid.IconsPerRow) return null;
 
-        double availableWidth = container.Width - PaddingX * 2;
-        int iconsPerRow = Math.Max(1, (int)(availableWidth / cellW));
-
-        int col = (int)((localX - left) / cellW);
-        int row = (int)((localY - top)  / cellH);
-        if (col < 0 || col >= iconsPerRow) return null;
-
-        int index = row * iconsPerRow + col;
+        int index = row * grid.IconsPerRow + col;
         return index >= 0 && index < iconCount ? index : null;
     }
 }

@@ -94,6 +94,7 @@
   <data name="Settings_PathAddedTitle" xml:space="preserve"><value>제외 경로 추가</value></data>
   <data name="Settings_PathNotExistMessage" xml:space="preserve"><value>지정한 경로가 현재 존재하지 않습니다. 목록에는 추가되며, 나중에 해당 경로가 생기면 자동으로 적용됩니다.</value></data>
   <data name="Settings_ConfirmExternalLinkLaunch" xml:space="preserve"><value>외부 링크 실행 전 확인 (.url 바로가기)</value></data>
+  <data name="Settings_DisableDesktopIconGridSettings" xml:space="preserve"><value>바탕화면의 "아이콘을 그리드에 맞춤"·"자동 정렬" 자동으로 끄기 (권장)</value></data>
 
   <!-- F-023 container-limit message (MainViewModel.CreateContainerAt) -->
   <data name="Container_LimitTitle" xml:space="preserve"><value>Container 생성 제한</value></data>

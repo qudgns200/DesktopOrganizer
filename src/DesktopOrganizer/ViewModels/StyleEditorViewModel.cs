@@ -99,6 +99,26 @@ public class StyleEditorViewModel : ObservableObject
     /// <summary>All available border styles for ComboBox binding.</summary>
     public IReadOnlyList<BorderStyle> BorderStyleOptions { get; } = Enum.GetValues<BorderStyle>();
 
+    /// <summary>
+    /// F-009: click-to-pick accent colours. Typing raw ARGB hex is still supported as the
+    /// advanced path, but the palette is the primary way to set a colour.
+    /// </summary>
+    public IReadOnlyList<string> AccentPalette { get; } = new[]
+    {
+        "#FF4C8DFF", // blue
+        "#FF00B0FF", // sky
+        "#FF00BFA5", // teal
+        "#FF00C853", // green
+        "#FFAEEA00", // lime
+        "#FFFFC400", // amber
+        "#FFFF8A00", // orange
+        "#FFFF5252", // red
+        "#FFFF4081", // pink
+        "#FFAB47BC", // purple
+        "#FF7C4DFF", // violet
+        "#FF90A4AE"  // slate
+    };
+
     /// <summary>Builds a new ContainerStyle from the current editor state.</summary>
     public ContainerStyle ToContainerStyle() => new()
     {

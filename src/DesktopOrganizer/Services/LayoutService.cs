@@ -23,11 +23,25 @@ public class LayoutService
         Converters    = { new JsonStringEnumConverter() }
     };
 
-    private readonly string _layoutsDir;
+    private readonly string             _layoutsDir;
+    private readonly IconSortService    _sortService;
+    private readonly DesktopGridService? _desktopGrid;
 
+    /// <summary>Convenience ctor — builds its own IconSortService (kept for existing callers/tests).</summary>
     public LayoutService(SettingsService settings)
+        : this(settings, new IconSortService(settings)) { }
+
+    /// <summary>
+    /// Production ctor. Takes the SAME <see cref="IconSortService"/> instance as
+    /// <see cref="AutoOrganizeService"/> so restore uses one grid policy for the whole app
+    /// (F-021 previously duplicated the layout math and drifted to the raw constants).
+    /// </summary>
+    public LayoutService(SettingsService settings, IconSortService sortService,
+        DesktopGridService? desktopGrid = null)
     {
-        _layoutsDir = settings.LayoutsDir;
+        _layoutsDir  = settings.LayoutsDir;
+        _sortService = sortService;
+        _desktopGrid = desktopGrid;
     }
 
     // ── F-020: Capture & Save ────────────────────────────────────
@@ -188,6 +202,10 @@ public class LayoutService
                 SortMode = snap.SortMode
             };
 
+            // One grid per container, computed from the SAME source of truth as F-010's live
+            // layout — hoisted out of the loop (it used to be recomputed per icon).
+            var grid = _sortService.ComputeGrid(c);
+
             // Restore icon order entries; track positions for Win32 call
             c.IconOrder.Clear();
             foreach (var placement in snap.Icons.OrderBy(p => p.OrderIndex))
@@ -205,27 +223,12 @@ public class LayoutService
                     continue;
                 }
 
-                // Compute scaled icon position within new container bounds
                 var icon       = iconLookup[placement.IconPath];
                 var displayName = icon.Extension == ".lnk"
                     ? Path.GetFileNameWithoutExtension(icon.FileName)
                     : icon.FileName;
 
-                // Grid position is recomputed from index after container is added.
-                // Apply the same effective cell pitch (base + configured spacing) as
-                // IconSortService so restore matches the live auto-organize layout.
-                int spacing = settings.Config.Settings.IconSpacingPx;
-                int cellW   = IconSortService.IconCellWidth  + spacing;
-                int cellH   = IconSortService.IconCellHeight + spacing;
-                int perRow  = Math.Max(1, (int)((c.Width - IconSortService.PaddingX * 2) / cellW));
-
-                int iconX = (int)(c.X + IconSortService.PaddingX +
-                    (placement.OrderIndex % perRow) * cellW);
-                int iconY = (int)(c.Y + IconSortService.PaddingY +
-                    (c.Style.ShowTitle ? IconSortService.TitleBarHeight : 0) +
-                    (placement.OrderIndex / perRow) * cellH);
-
-                positionMap[displayName] = (iconX, iconY);
+                positionMap[displayName] = grid.PositionOf(placement.OrderIndex);
             }
 
             settings.Config.Containers.Add(c);
@@ -245,7 +248,10 @@ public class LayoutService
 
     /// <summary>Extracted for testability — calls the Win32 position writer.</summary>
     protected virtual void WritePositions(Dictionary<string, (int X, int Y)> positions)
-        => DesktopIconInterop.WriteIconPositions(positions);
+    {
+        _desktopGrid?.EnsureDisabled();   // F-010 item 8, same guard as the live layout path
+        DesktopIconInterop.WriteIconPositions(positions);
+    }
 
     // ── Helpers ───────────────────────────────────────────────────
 

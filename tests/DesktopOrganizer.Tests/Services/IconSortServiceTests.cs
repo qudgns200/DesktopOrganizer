@@ -301,7 +301,11 @@ public class IconSortServiceTests
         Assert.Equal(c.Id, result[0].AssignedContainerId);
     }
 
-    // ── F-010 bug fix: cell pitch floored to measured desktop grid ─
+    // ── F-010 item 7: pitch quantized to the shell cell + origin aligned ─
+    //
+    // These replace the earlier "measured cell as a floor" tests. That rule was the bug: it
+    // produced pitch = measuredCell + spacing, i.e. NOT a multiple of the shell cell, so
+    // align-to-grid re-quantized every icon and the container-move scatter returned.
 
     /// <summary>Builds an IconSortService whose grid measurement returns a fixed size (DIP).</summary>
     private static IconSortService WithGrid(double? cx, double? cy) =>
@@ -309,59 +313,104 @@ public class IconSortServiceTests
             gridCellProvider: cx is null || cy is null ? null : () => (cx.Value, cy.Value));
 
     [Fact]
-    public void ComputePositions_MeasuredGridLargerThanBase_UsesMeasuredPitch()
+    public void ComputeGrid_PitchIsIntegerMultipleOfMeasuredCell()
     {
-        // Base cell width 75; measured grid 100 → effective pitch 100.
-        var sut = WithGrid(100, 100);
-        var c   = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
-        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+        // Base 75, cell 100 → round(75/100)=1 → pitch exactly one cell.
+        var grid = WithGrid(100, 100).ComputeGrid(MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false));
 
-        sut.ComputePositions(c, icons);
+        Assert.Equal(100, grid.PitchX);
+        Assert.Equal(0, grid.PitchX % 100);
+    }
 
-        // Column 1 icon should sit one measured cell (100) to the right of column 0, not 75.
-        Assert.Equal(IconSortService.PaddingX + 100, icons[1].X);
+    [Theory]
+    [InlineData(60)]
+    [InlineData(75)]
+    [InlineData(80)]
+    [InlineData(120)]
+    public void ComputeGrid_PitchAlwaysDivisibleByCell(double cell)
+    {
+        var grid = WithGrid(cell, cell).ComputeGrid(MakeContainer(x: 137, y: 91, w: 1000, h: 1000));
+
+        Assert.Equal(0, grid.PitchX % cell, precision: 6);
+        Assert.Equal(0, grid.PitchY % cell, precision: 6);
     }
 
     [Fact]
-    public void ComputePositions_MeasuredGridSmallerThanBase_KeepsBaseFloor()
+    public void ComputeGrid_SmallCell_PitchRoundsUpToWholeCells()
     {
-        // Measured grid 40 is below the 75 base floor → base 75 wins.
-        var sut = WithGrid(40, 40);
-        var c   = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
-        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+        // Base 75, cell 40 → round(75/40) = 2 cells → pitch 80 (still a clean multiple).
+        var grid = WithGrid(40, 40).ComputeGrid(MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false));
 
-        sut.ComputePositions(c, icons);
-
-        Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+        Assert.Equal(80, grid.PitchX);
     }
 
     [Fact]
-    public void ComputePositions_NoGridProvider_UsesBaseConstants()
+    public void ComputeGrid_OriginQuantizedToCellBoundary()
     {
-        // Parameterless _sut has no provider → base 75/90.
-        var c = MakeContainer(x: 0, y: 0, w: 1000, h: 1000, showTitle: false);
-        var icons = new List<IconInfo> { MakeIcon("A"), MakeIcon("B") };
+        // Container at X=137 → raw origin 147 → aligned up to the next 80-boundary (160).
+        var grid = WithGrid(80, 80).ComputeGrid(MakeContainer(x: 137, y: 0, w: 1000, h: 1000, showTitle: false));
 
-        _sut.ComputePositions(c, icons);
-
-        Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+        Assert.Equal(0, grid.OriginX % 80, precision: 6);
+        Assert.Equal(160, grid.OriginX);
     }
 
     [Fact]
-    public void ComputePositions_MeasuredGridReducesIconsPerRow()
+    public void ComputeGrid_AlignedOrigin_NeverPrecedesPaddedContentBox()
     {
-        // Width fits 3 base cells (75) but only 2 measured cells (100).
-        var sut = WithGrid(100, 100);
-        var c   = MakeContainer(x: 0, y: 0,
-            w: IconSortService.PaddingX * 2 + 100 * 2 + 20, // room for exactly 2 columns of 100
-            h: 1000, showTitle: false);
-        var icons = Enumerable.Range(0, 3).Select(i => MakeIcon($"Icon{i}")).ToList();
+        // Ceiling (not Round) so the first row can't land above/left of the content box.
+        var c    = MakeContainer(x: 137, y: 91, w: 1000, h: 1000, showTitle: true);
+        var grid = WithGrid(80, 80).ComputeGrid(c);
+
+        Assert.True(grid.OriginX >= c.X + IconSortService.PaddingX);
+        Assert.True(grid.OriginY >= c.Y + IconSortService.PaddingY + IconSortService.TitleBarHeight);
+    }
+
+    [Fact]
+    public void ComputePositions_ColumnOffsetsAreExactCellMultiples()
+    {
+        // The accumulating-drift test: every column must sit on a cell boundary.
+        var sut   = WithGrid(80, 80);
+        var c     = MakeContainer(x: 0, y: 0, w: 4000, h: 1000, showTitle: false);
+        var icons = Enumerable.Range(0, 12).Select(i => MakeIcon($"Icon{i:00}")).ToList();
 
         sut.ComputePositions(c, icons);
 
-        // 2 per row → icon 2 wraps to row 1 (same X as icon 0, larger Y).
-        Assert.Equal(icons[0].X, icons[2].X);
-        Assert.True(icons[2].Y > icons[0].Y);
+        foreach (var icon in icons)
+            Assert.Equal(0, icon.X % 80);
+    }
+
+    [Fact]
+    public void ComputePositions_FractionalDipCell_NoCumulativeDrift()
+    {
+        // 80 physical px at 150% DPI = 53.3333 DIP. Truncating the cell to an int would drift
+        // ~1px per column; keeping it fractional must not.
+        const double cell = 80.0 / 1.5;
+        var sut   = WithGrid(cell, cell);
+        var c     = MakeContainer(x: 0, y: 0, w: 4000, h: 1000, showTitle: false);
+        var icons = Enumerable.Range(0, 10).Select(i => MakeIcon($"Icon{i:00}")).ToList();
+
+        sut.ComputePositions(c, icons);
+        var grid = sut.ComputeGrid(c);
+
+        for (int i = 0; i < icons.Count; i++)
+        {
+            double ideal = grid.OriginX + i * grid.PitchX;
+            Assert.True(Math.Abs(icons[i].X - ideal) < 1.0,
+                $"icon {i} drifted: {icons[i].X} vs ideal {ideal}");
+        }
+    }
+
+    [Fact]
+    public void ComputeGrid_NoGridProvider_UsesBaseConstantsUnaligned()
+    {
+        // Parameterless _sut has no provider → base 75/90, origin left unaligned.
+        var c    = MakeContainer(x: 137, y: 0, w: 1000, h: 1000, showTitle: false);
+        var grid = _sut.ComputeGrid(c);
+
+        Assert.Equal(IconSortService.IconCellWidth,  grid.PitchX);
+        Assert.Equal(IconSortService.IconCellHeight, grid.PitchY);
+        Assert.Equal(c.X + IconSortService.PaddingX, grid.OriginX);
+        Assert.False(grid.IsGridAligned);
     }
 
     [Fact]
@@ -376,5 +425,51 @@ public class IconSortServiceTests
 
         Assert.Null(ex);
         Assert.Equal(IconSortService.PaddingX + IconSortService.IconCellWidth, icons[1].X);
+    }
+
+    [Fact]
+    public void ComputeGrid_IconsPerRow_AccountsForAlignedOrigin_NoRightOverflow()
+    {
+        var c    = MakeContainer(x: 137, y: 0, w: 500, h: 1000, showTitle: false);
+        var grid = WithGrid(80, 80).ComputeGrid(c);
+
+        // The last column must still start inside the container's padded content box.
+        double lastColumnX = grid.OriginX + (grid.IconsPerRow - 1) * grid.PitchX;
+        Assert.True(lastColumnX <= c.X + c.Width - IconSortService.PaddingX,
+            $"last column {lastColumnX} overflows right edge {c.X + c.Width - IconSortService.PaddingX}");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HitTestIndex_RoundTripsEveryComputedPosition(bool measured)
+    {
+        // Protects double-click launch: HitTestIndex and ComputePositions consume the same grid,
+        // so hit-testing each icon's own cell must return that icon's index.
+        var sut   = measured ? WithGrid(80, 80) : new IconSortService();
+        var c     = MakeContainer(x: 137, y: 91, w: 700, h: 700, showTitle: true);
+        var icons = Enumerable.Range(0, 9).Select(i => MakeIcon($"Icon{i}")).ToList();
+
+        sut.ComputePositions(c, icons);
+        var grid = sut.ComputeGrid(c);
+
+        for (int i = 0; i < icons.Count; i++)
+        {
+            // Probe slightly inside the cell, converted back to container-local coords.
+            double localX = icons[i].X - c.X + grid.PitchX / 4;
+            double localY = icons[i].Y - c.Y + grid.PitchY / 4;
+
+            Assert.Equal(i, sut.HitTestIndex(c, localX, localY, icons.Count));
+        }
+    }
+
+    [Fact]
+    public void HitTestIndex_PointBeforeAlignedOrigin_ReturnsNull()
+    {
+        var c   = MakeContainer(x: 137, y: 0, w: 700, h: 700, showTitle: false);
+        var sut = WithGrid(80, 80);
+
+        // Left of the aligned origin (inside the padding) belongs to no cell.
+        Assert.Null(sut.HitTestIndex(c, localX: 1, localY: 50, iconCount: 5));
     }
 }

@@ -47,8 +47,17 @@ public partial class App : Application
 
         var containerService = new ContainerService(_settingsService);
         var ruleService      = new RuleService(_settingsService);
-        _layoutService       = new LayoutService(_settingsService);
-        _mainVm              = new MainViewModel(containerService, ruleService, _settingsService);
+
+        // F-010: one grid policy for the whole app — the same IconSortService instance is shared
+        // by the live layout path and F-021 restore so they can never compute different grids.
+        var desktopGrid = new DesktopGridService(_settingsService);
+        var sortService = new IconSortService(_settingsService);
+
+        // F-010 item 8: clear the shell's grid-snap BEFORE the first layout is written.
+        desktopGrid.EnsureDisabled(force: true);
+
+        _layoutService = new LayoutService(_settingsService, sortService, desktopGrid);
+        _mainVm        = new MainViewModel(containerService, ruleService, _settingsService);
         _mainVm.SetLayoutService(_layoutService);
 
         // F-016 / F-017: desktop watcher + auto-organizer
@@ -60,8 +69,9 @@ public partial class App : Application
             ruleService,
             _settingsService,
             _watcherService,
-            new IconSortService(_settingsService),
-            new IconOrderService(_settingsService));
+            sortService,
+            new IconOrderService(_settingsService),
+            desktopGrid);
         _autoOrganize.Initialize();
         _autoOrganize.ApplySettingsChanged(); // F-023: apply WatcherDebounceMs from config.json at startup
         _mainVm.SetAutoOrganize(_autoOrganize);

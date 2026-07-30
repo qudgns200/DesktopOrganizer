@@ -29,6 +29,12 @@
                 <CheckBox Content="{x:Static res:Strings.Settings_ConfirmExternalLinkLaunch}"
                           IsChecked="{Binding ConfirmExternalLinkLaunch}" Margin="0,6,0,0"/>
 
+                <!-- F-010 item 8: keep the shell from re-snapping our icon positions -->
+                <CheckBox IsChecked="{Binding DisableDesktopIconGridSettings}" Margin="0,6,0,0">
+                    <TextBlock Text="{x:Static res:Strings.Settings_DisableDesktopIconGridSettings}"
+                               TextWrapping="Wrap"/>
+                </CheckBox>
+
                 <!-- Watcher debounce -->
                 <TextBlock Text="{x:Static res:Strings.Settings_WatcherDebounceMsLabel}" Margin="0,12,0,2"/>
                 <TextBox Text="{Binding WatcherDebounceMs, UpdateSourceTrigger=PropertyChanged}"

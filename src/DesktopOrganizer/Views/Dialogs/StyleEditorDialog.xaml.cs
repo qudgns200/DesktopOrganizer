@@ -1,6 +1,8 @@
 using System.Windows;
 using DesktopOrganizer.Models;
 using DesktopOrganizer.ViewModels;
+// UseWindowsForms=true: resolve Button ambiguity with System.Windows.Forms.Button
+using Button = System.Windows.Controls.Button;
 
 namespace DesktopOrganizer.Views.Dialogs;
 
@@ -16,6 +18,13 @@ public partial class StyleEditorDialog : Window
         _vm = new StyleEditorViewModel(source);
         InitializeComponent();
         DataContext = _vm;
+    }
+
+    /// <summary>F-009: palette swatch click sets the accent colour (live preview updates).</summary>
+    private void OnAccentSwatchClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string hex })
+            _vm.AccentColor = hex;
     }
 
     private void OnOkClick(object sender, RoutedEventArgs e)

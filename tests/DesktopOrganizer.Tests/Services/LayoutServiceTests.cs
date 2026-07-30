@@ -23,13 +23,18 @@ public class LayoutServiceTests : IDisposable
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private TestableLayoutService MakeSut() => new(_settings);
+    // Parameterless IconSortService → no grid interop, so layout is deterministic in tests
+    // (the production ctor would wire DesktopIconInterop and read the real desktop).
+    private static readonly IconSortService TestSortService = new();
+
+    private TestableLayoutService MakeSut() => new(_settings, TestSortService);
 
     private sealed class TestableLayoutService : LayoutService
     {
         public List<Dictionary<string, (int X, int Y)>> PositionWrites { get; } = new();
 
-        public TestableLayoutService(SettingsService settings) : base(settings) { }
+        public TestableLayoutService(SettingsService settings, IconSortService sortService)
+            : base(settings, sortService) { }
 
         protected override void WritePositions(Dictionary<string, (int X, int Y)> positions)
             => PositionWrites.Add(new Dictionary<string, (int X, int Y)>(positions));
@@ -171,6 +176,41 @@ public class LayoutServiceTests : IDisposable
 
         Assert.Single(_settings.Config.Containers);
         Assert.Equal("Restored", _settings.Config.Containers[0].Name);
+    }
+
+    [Fact]
+    public void Restore_PositionsMatchIconSortServiceComputeGrid()
+    {
+        // F-021 restore used to duplicate the layout math and silently drifted to the raw
+        // constants, bypassing the F-010 grid fix. It must now agree with ComputeGrid exactly.
+        var sut     = MakeSut();
+        var iconA   = Path.Combine(_tempDir, "A.txt");
+        var iconB   = Path.Combine(_tempDir, "B.txt");
+        var layout  = MakeLayout();
+        var snapshot = new LayoutContainerSnapshot
+        {
+            ContainerId   = Guid.NewGuid(),
+            ContainerName = "Grid",
+            X = 137, Y = 91, Width = 400, Height = 300
+        };
+        snapshot.Icons.Add(new LayoutIconPlacement { IconPath = iconA, OrderIndex = 0 });
+        snapshot.Icons.Add(new LayoutIconPlacement { IconPath = iconB, OrderIndex = 1 });
+        layout.Containers.Add(snapshot);
+
+        var present = new[]
+        {
+            new IconInfo { FileName = "A.txt", FullPath = iconA, Extension = ".txt" },
+            new IconInfo { FileName = "B.txt", FullPath = iconB, Extension = ".txt" }
+        };
+
+        sut.Restore(layout, _settings, present);
+
+        var restored = _settings.Config.Containers.Single();
+        var expected = TestSortService.ComputeGrid(restored);
+        var written  = sut.PositionWrites.Single();
+
+        Assert.Equal(expected.PositionOf(0), written["A.txt"]);
+        Assert.Equal(expected.PositionOf(1), written["B.txt"]);
     }
 
     [Fact]

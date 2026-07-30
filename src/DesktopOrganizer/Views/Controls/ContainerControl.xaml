@@ -63,47 +63,48 @@
                         MouseLeftButtonUp="OnTitleBarMouseLeftButtonUp">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Offset="0" Color="#4D000000"/>
-                            <GradientStop Offset="1" Color="#73000000"/>
+                            <GradientStop Offset="0" Color="#40000000"/>
+                            <GradientStop Offset="1" Color="#59000000"/>
                         </LinearGradientBrush>
                     </Border.Background>
                     <Grid>
-                        <!-- Header content: accent dot + title / inline editor -->
-                        <Grid Margin="10,0,8,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Accent dot -->
-                            <Ellipse Grid.Column="0" Width="8" Height="8" Margin="0,0,7,0"
-                                     VerticalAlignment="Center"
-                                     Fill="{Binding StyleAccentColor, Converter={StaticResource StringToBrush}}"/>
-
-                            <!-- Normal mode -->
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding Name}"
+                        <!-- Centered title + item-count badge (iTop-style header) -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Margin="10,0,10,0"
+                                    Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}">
+                            <TextBlock Text="{Binding Name}"
                                        Foreground="{Binding StyleTitleFontColor, Converter={StaticResource StringToBrush}}"
                                        FontSize="{Binding StyleTitleFontSize}"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"
-                                       Visibility="{Binding IsEditing, Converter={StaticResource InvBoolToVis}}"/>
-                            <!-- Inline edit mode -->
-                            <TextBox Grid.Column="1"
-                                     x:Name="NameEditor"
-                                     Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                                     Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     Foreground="White"
-                                     SelectionBrush="LightBlue"
-                                     CaretBrush="White"
-                                     FontSize="12"
-                                     VerticalAlignment="Center"
-                                     KeyDown="OnNameEditorKeyDown"
-                                     LostFocus="OnNameEditorLostFocus"/>
-                        </Grid>
+                                       VerticalAlignment="Center"/>
+
+                            <!-- Count badge — filled with the container's accent colour -->
+                            <Border Margin="7,0,0,0" MinWidth="18" Height="16"
+                                    CornerRadius="8" Padding="5,0"
+                                    VerticalAlignment="Center"
+                                    Background="{Binding StyleAccentColor, Converter={StaticResource StringToBrush}}">
+                                <TextBlock Text="{Binding IconCount}"
+                                           Foreground="White" FontSize="10" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Inline edit mode (kept left-aligned for a natural caret position) -->
+                        <TextBox x:Name="NameEditor"
+                                 Margin="10,0,10,0"
+                                 Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="White"
+                                 SelectionBrush="LightBlue"
+                                 CaretBrush="White"
+                                 FontSize="12"
+                                 VerticalAlignment="Center"
+                                 KeyDown="OnNameEditorKeyDown"
+                                 LostFocus="OnNameEditorLostFocus"/>
 
                         <!-- Accent underline separating header from body -->
                         <Border Height="2" VerticalAlignment="Bottom"

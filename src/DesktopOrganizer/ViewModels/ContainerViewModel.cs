@@ -18,6 +18,7 @@ public class ContainerViewModel : ObservableObject
     private readonly ContainerService _service;
     private bool _isEditing;
     private string _editName = string.Empty;
+    private int _iconCount;
 
     public ContainerViewModel(Container model, ContainerService service)
     {
@@ -78,6 +79,17 @@ public class ContainerViewModel : ObservableObject
     public string StyleTitleFontColor    => _model.Style.TitleFontColor;
     public double StyleCornerRadius      => _model.Style.CornerRadius;
     public string StyleAccentColor       => _model.Style.AccentColor;
+
+    /// <summary>
+    /// F-009: number of icons currently assigned to this container, shown as the header badge.
+    /// Membership lives in <see cref="Services.AutoOrganizeService"/>, so MainViewModel pushes
+    /// this value in after any operation that can change it.
+    /// </summary>
+    public int IconCount
+    {
+        get => _iconCount;
+        set => SetField(ref _iconCount, value);
+    }
 
     // ── Inline-edit state ────────────────────────────────────────
 

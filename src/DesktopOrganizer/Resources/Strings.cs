@@ -63,6 +63,7 @@ public static class Strings
     public static string Settings_PathAddedTitle           => Get();
     public static string Settings_PathNotExistMessage      => Get();
     public static string Settings_ConfirmExternalLinkLaunch => Get();
+    public static string Settings_DisableDesktopIconGridSettings => Get();
 
     // ── F-023 container-limit message ───────────────────────────────
     public static string Container_LimitTitle         => Get();

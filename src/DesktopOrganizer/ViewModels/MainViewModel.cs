@@ -34,7 +34,22 @@ public class MainViewModel : ObservableObject
         => _layoutService = layoutService;
 
     public void SetAutoOrganize(AutoOrganizeService svc)
-        => _autoOrganize = svc;
+    {
+        _autoOrganize = svc;
+        RefreshIconCounts();   // Initialize() has already restored container membership
+    }
+
+    /// <summary>
+    /// F-009: pulls each container's current icon count from the membership registry into its
+    /// view-model so the header badge stays truthful. Called after every operation that can
+    /// change membership (rules applied, container created/deleted, icons repositioned).
+    /// </summary>
+    private void RefreshIconCounts()
+    {
+        if (_autoOrganize is null) return;
+        foreach (var vm in Containers)
+            vm.IconCount = _autoOrganize.GetContainerIcons(vm.Id).Count;
+    }
 
     public ObservableCollection<ContainerViewModel> Containers { get; } = new();
 
@@ -90,7 +105,12 @@ public class MainViewModel : ObservableObject
     }
 
     /// <summary>Applies all active rules and returns the number of repositioned icons.</summary>
-    public int ApplyAllRules() => _autoOrganize?.ApplyAllRules() ?? 0;
+    public int ApplyAllRules()
+    {
+        int moved = _autoOrganize?.ApplyAllRules() ?? 0;
+        RefreshIconCounts();
+        return moved;
+    }
 
     // ── F-023: Settings dialog ────────────────────────────────────
 
@@ -204,6 +224,7 @@ public class MainViewModel : ObservableObject
     {
         if (sender is not ContainerViewModel vm) return;
         _autoOrganize?.RepositionContainerIcons(vm.Id);
+        RefreshIconCounts();
     }
 
     // ── Double-click launch: open the icon under the cursor ──────

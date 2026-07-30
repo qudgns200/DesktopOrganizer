@@ -14,6 +14,7 @@ public class SettingsViewModelTests
         MaxContainers             = 50,
         LogLevel                  = AppLogLevel.Info,
         ConfirmExternalLinkLaunch = true,
+        DisableDesktopIconGridSettings = true,
         ExcludedPaths             = new List<string> { @"C:\excluded1", @"C:\excluded2" }
     };
 
@@ -31,7 +32,19 @@ public class SettingsViewModelTests
         Assert.Equal(src.MaxContainers,             vm.MaxContainers);
         Assert.Equal(src.LogLevel,                  vm.LogLevel);
         Assert.Equal(src.ConfirmExternalLinkLaunch, vm.ConfirmExternalLinkLaunch);
+        Assert.Equal(src.DisableDesktopIconGridSettings, vm.DisableDesktopIconGridSettings);
         Assert.Equal(src.ExcludedPaths,             vm.ExcludedPaths);
+    }
+
+    [Fact]
+    public void ApplyTo_RoundTripsDisableDesktopIconGridSettings()
+    {
+        var target = DefaultSettings();
+        var vm = new SettingsViewModel(target) { DisableDesktopIconGridSettings = false };
+
+        vm.ApplyTo(target);
+
+        Assert.False(target.DisableDesktopIconGridSettings);
     }
 
     // ── Validate ──────────────────────────────────────────────────

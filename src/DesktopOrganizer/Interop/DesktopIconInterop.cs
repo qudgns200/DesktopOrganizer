@@ -69,6 +69,10 @@ internal static class DesktopIconInterop
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] private static extern uint GetDpiForSystem();
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int nIndex);
+
+    private const int SM_CXICONSPACING = 13;
+    private const int SM_CYICONSPACING = 14;
 
     [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
@@ -131,12 +135,13 @@ internal static class DesktopIconInterop
         foreach (var kvp in positions)
             nfcLookup[kvp.Key.Normalize(NormalizationForm.FormC)] = (kvp.Key, kvp.Value);
 
-        int moved = 0;
+        int landed = 0;
         try
         {
             int  textBytes = MAX_ICON_NAME * sizeof(char);
             nint lvSize    = Marshal.SizeOf<LVITEM>();
-            nint total     = lvSize + textBytes;   // no remote POINT needed for MAKELONG encoding
+            nint ptSize    = Marshal.SizeOf<POINT>();
+            nint total     = lvSize + ptSize + textBytes;   // POINT is for the verification read-back
 
             var remote = VirtualAllocEx(hProcess, IntPtr.Zero, total, MEM_COMMIT, PAGE_READWRITE);
             if (remote == IntPtr.Zero)
@@ -148,12 +153,16 @@ internal static class DesktopIconInterop
             try
             {
                 var remoteLv  = remote;
-                var remoteTxt = remote + (int)lvSize;
+                var remotePt  = remote + (int)lvSize;
+                var remoteTxt = remote + (int)lvSize + (int)ptSize;
 
                 // Track which original position keys were matched (for unmatched logging)
                 var matched   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 // Collect all ListView names for diagnostic logging when items are unmatched
                 var lvNames   = new List<string>(count);
+                // itemIndex → (key, requested physical position) for the verification pass
+                var requested = new Dictionary<int, (string Key, int X, int Y)>();
+                int accepted  = 0;
 
                 for (int i = 0; i < count; i++)
                 {
@@ -213,9 +222,17 @@ internal static class DesktopIconInterop
                     // Cast via uint to avoid CS0675 sign-extension warning
                     long lp = (long)(uint)(physX & 0xFFFF) | ((long)(uint)(physY & 0xFFFF) << 16);
 
-                    SendMessage(listView, LVM_SETITEMPOSITION, new IntPtr(i), new IntPtr(lp));
-                    moved++;
+                    // Capture the result instead of assuming success — the old code incremented
+                    // unconditionally, so the log always claimed a perfect write (F-010 item 9).
+                    var result = SendMessage(listView, LVM_SETITEMPOSITION, new IntPtr(i), new IntPtr(lp));
+                    if (result != IntPtr.Zero) accepted++;
+                    requested[i] = (matchedKey, physX, physY);
                 }
+
+                // Verification pass: re-read where the icons ACTUALLY are, reusing the open
+                // process handle and remote buffer, and classify what the shell did to each one.
+                landed = VerifyPlacements(hProcess, listView, count, remoteLv, remotePt, remoteTxt,
+                    textBytes, requested, accepted, dpiScale);
 
                 // Report unmatched items. When any remain, also dump the exact ListView
                 // names (at Info level so it appears in default logs) so the mismatch
@@ -241,36 +258,133 @@ internal static class DesktopIconInterop
             CloseHandle(hProcess);
         }
 
-        LogService.Instance.Info("Interop",
-            $"WriteIconPositions: repositioned {moved}/{positions.Count} icon(s) (DPI scale {dpiScale:F2})");
-        return moved;
+        return landed;
     }
 
     /// <summary>
+    /// Re-reads actual icon positions after a write and classifies each one (F-010 item 9).
+    /// Returns the number of icons that genuinely landed where we asked (exact or a harmless
+    /// sub-half-cell snap nudge). Logs relocations and collisions at Warn — those are the
+    /// scatter signature — plus one honest summary line.
+    /// </summary>
+    private static int VerifyPlacements(
+        IntPtr hProcess, IntPtr listView, int count,
+        IntPtr remoteLv, IntPtr remotePt, IntPtr remoteTxt, int textBytes,
+        Dictionary<int, (string Key, int X, int Y)> requested,
+        int accepted, double dpiScale)
+    {
+        // Actual positions for the items we wrote, plus a stacking check.
+        var actual   = new Dictionary<int, (int X, int Y)>();
+        var occupied = new Dictionary<(int, int), int>();
+
+        foreach (var index in requested.Keys)
+        {
+            var pos = ReadItemPosition(hProcess, listView, index, remotePt);
+            actual[index] = pos;
+            occupied[pos] = occupied.TryGetValue(pos, out var n) ? n + 1 : 1;
+        }
+
+        var cell = GetDesktopGridCellSize();
+        double cellPhysX = (cell?.Cx ?? 0) * dpiScale;
+        double cellPhysY = (cell?.Cy ?? 0) * dpiScale;
+
+        int exact = 0, snapped = 0, relocated = 0, collided = 0;
+
+        foreach (var (index, req) in requested)
+        {
+            (int X, int Y)? got = actual.TryGetValue(index, out var a) ? a : null;
+            bool shared = got is not null && occupied.TryGetValue(got.Value, out var c) && c > 1;
+
+            var outcome = IconPlacementVerifier.Classify(
+                (req.X, req.Y), got, cellPhysX, cellPhysY, shared);
+
+            switch (outcome)
+            {
+                case PlacementOutcome.Exact:        exact++;     break;
+                case PlacementOutcome.SnapAdjusted: snapped++;   break;
+                case PlacementOutcome.Relocated:
+                    relocated++;
+                    LogService.Instance.Warn("Interop",
+                        $"'{req.Key}' was relocated by Windows: asked ({req.X},{req.Y}) " +
+                        $"but it is at ({got?.X},{got?.Y})");
+                    break;
+                case PlacementOutcome.Collided:
+                    collided++;
+                    LogService.Instance.Warn("Interop",
+                        $"'{req.Key}' collided with another icon at ({got?.X},{got?.Y})");
+                    break;
+            }
+        }
+
+        int landed = exact + snapped;
+        var state  = DesktopViewSettingsInterop.TryReadState();
+
+        LogService.Instance.Info("Interop",
+            $"WriteIconPositions: sent={requested.Count} accepted={accepted} landed={landed} " +
+            $"(exact={exact} snapped={snapped} relocated={relocated} collided={collided}) " +
+            $"dpiScale={dpiScale:F2} cell={cellPhysX:F0}x{cellPhysY:F0}px " +
+            $"snapToGrid={state?.SnapToGrid.ToString() ?? "?"} " +
+            $"autoArrange={state?.AutoArrange.ToString() ?? "?"}");
+
+        return landed;
+    }
+
+    // Remembers the last logged measurement so this doesn't flood the log — it is called on
+    // every layout pass (ComputePositions and HitTestIndex both use it).
+    private static string _lastGridLog = string.Empty;
+
+    /// <summary>
     /// Returns the desktop's large-icon grid cell size (cx, cy) in WPF DIPs, or null if it
-    /// cannot be measured. Used to floor our container layout's cell pitch (F-010) so that,
-    /// when the shell's "Align icons to grid" is active, each icon lands in its own grid cell
-    /// instead of colliding — which the shell otherwise resolves by scattering icons.
+    /// cannot be measured. <see cref="Services.IconSortService.ComputeGrid"/> quantizes our cell
+    /// pitch to a whole multiple of this so that, with the shell's "Align icons to grid" active,
+    /// each icon lands in its own cell instead of colliding — the collisions are what the shell
+    /// resolves by scattering icons (F-010 item 7).
     /// </summary>
     public static (double Cx, double Cy)? GetDesktopGridCellSize()
     {
         var listView = FindDesktopListView();
-        if (listView == IntPtr.Zero) return null;
+        if (listView == IntPtr.Zero)
+        {
+            LogGridOnce("desktop ListView not found");
+            return null;
+        }
 
         // wParam FALSE → spacing for the large-icon view (the desktop's mode).
-        var raw    = SendMessage(listView, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero);
-        int packed = raw.ToInt32();
-        if (packed == 0) return null;
+        // ToInt64, NOT ToInt32: on x64 ToInt32 throws OverflowException whenever the LRESULT has
+        // any high-dword bits set, and the caller swallows it — which is why this measurement may
+        // never have taken effect on the user's machine.
+        long packed = SendMessage(listView, LVM_GETITEMSPACING, IntPtr.Zero, IntPtr.Zero).ToInt64();
 
-        int cxPhysical = packed & 0xFFFF;
-        int cyPhysical = (packed >> 16) & 0xFFFF;
-        if (cxPhysical <= 0 || cyPhysical <= 0) return null;
+        int cxPhysical = (int)(packed & 0xFFFF);
+        int cyPhysical = (int)((packed >> 16) & 0xFFFF);
+
+        // Documented fallback when the ListView won't answer (e.g. a virtualised desktop view).
+        if (cxPhysical <= 0 || cyPhysical <= 0)
+        {
+            cxPhysical = GetSystemMetrics(SM_CXICONSPACING);
+            cyPhysical = GetSystemMetrics(SM_CYICONSPACING);
+            if (cxPhysical <= 0 || cyPhysical <= 0)
+            {
+                LogGridOnce($"LVM_GETITEMSPACING returned 0x{packed:X} and SystemMetrics gave no spacing");
+                return null;
+            }
+        }
 
         double dpiScale = GetDpiForSystem() / 96.0;
         if (dpiScale <= 0) dpiScale = 1.0;
 
         // Layout math works in DIPs; WriteIconPositions converts back to physical px on write.
-        return (cxPhysical / dpiScale, cyPhysical / dpiScale);
+        var cell = (Cx: cxPhysical / dpiScale, Cy: cyPhysical / dpiScale);
+        LogGridOnce($"cell {cxPhysical}x{cyPhysical}px = {cell.Cx:F2}x{cell.Cy:F2} DIP (dpiScale {dpiScale:F2})");
+        return cell;
+    }
+
+    /// <summary>Logs a grid measurement/failure only when it differs from the previous one.</summary>
+    private static void LogGridOnce(string message)
+    {
+        if (_lastGridLog == message) return;
+        _lastGridLog = message;
+        LogService.Instance.Info("F-010", $"Desktop grid: {message}");
     }
 
     /// <summary>
@@ -341,12 +455,19 @@ internal static class DesktopIconInterop
         return result;
     }
 
-    private static IntPtr FindDesktopListView()
+    private static IntPtr FindDesktopListView() => FindDesktopViewWindows().ListView;
+
+    /// <summary>
+    /// Locates both desktop shell windows: SHELLDLL_DefView and its child SysListView32.
+    /// DefView is needed by <see cref="DesktopViewSettingsInterop"/> (the shell's own View-menu
+    /// commands are sent there); the ListView is what carries icon positions and styles.
+    /// Returns (Zero, Zero) when the desktop cannot be located.
+    /// </summary>
+    internal static (IntPtr DefView, IntPtr ListView) FindDesktopViewWindows()
     {
         // Primary path: Progman → SHELLDLL_DefView → SysListView32
-        var progman = FindWindow("Progman", null);
-        var lv = FindListViewUnder(progman);
-        if (lv != IntPtr.Zero) return lv;
+        var found = FindViewWindowsUnder(FindWindow("Progman", null));
+        if (found.ListView != IntPtr.Zero) return found;
 
         // Fallback: WorkerW windows (used when a video wallpaper or some customisations are active)
         var workerW = IntPtr.Zero;
@@ -354,19 +475,19 @@ internal static class DesktopIconInterop
         {
             workerW = FindWindowEx(IntPtr.Zero, workerW, "WorkerW", null);
             if (workerW == IntPtr.Zero) break;
-            lv = FindListViewUnder(workerW);
-            if (lv != IntPtr.Zero) return lv;
+            found = FindViewWindowsUnder(workerW);
+            if (found.ListView != IntPtr.Zero) return found;
         }
 
-        return IntPtr.Zero;
+        return (IntPtr.Zero, IntPtr.Zero);
     }
 
-    private static IntPtr FindListViewUnder(IntPtr parent)
+    private static (IntPtr DefView, IntPtr ListView) FindViewWindowsUnder(IntPtr parent)
     {
-        if (parent == IntPtr.Zero) return IntPtr.Zero;
+        if (parent == IntPtr.Zero) return (IntPtr.Zero, IntPtr.Zero);
         var shellView = FindWindowEx(parent, IntPtr.Zero, "SHELLDLL_DefView", null);
-        if (shellView == IntPtr.Zero) return IntPtr.Zero;
-        return FindWindowEx(shellView, IntPtr.Zero, "SysListView32", null);
+        if (shellView == IntPtr.Zero) return (IntPtr.Zero, IntPtr.Zero);
+        return (shellView, FindWindowEx(shellView, IntPtr.Zero, "SysListView32", null));
     }
 
     private static string ReadItemText(

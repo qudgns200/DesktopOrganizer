@@ -20,6 +20,13 @@ public class AppSettings
     /// <summary>F-025: Confirm before launching a .url shortcut from inside a container.</summary>
     public bool ConfirmExternalLinkLaunch { get; set; } = true;
 
+    /// <summary>
+    /// F-010 item 8: automatically turn off the desktop's "Align icons to grid" and
+    /// "Auto arrange icons", which otherwise relocate the icons we place into containers.
+    /// When false, the state is still read and logged (for diagnosis) but never changed.
+    /// </summary>
+    public bool DisableDesktopIconGridSettings { get; set; } = true;
+
     // Paths/names excluded from auto-organize (user-added)
     public List<string> ExcludedPaths { get; set; } = new();
 
